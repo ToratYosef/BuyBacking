@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- CashMyCell Step 1: capture cmc_id on landing/entry pages as early as possible -->
     <script src="/assets/js/cashmycell-tracking.js"></script>
     <script>
       window.CashMyCellTracking?.setCmcIdFromUrl();
@@ -10,437 +11,1761 @@
     </script>
     <script type="text/javascript" src="//widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js" async></script>
 
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-HMR9KFETRZ"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-HMR9KFETRZ');
-    </script>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-HMR9KFETRZ"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
 
-    <meta charset="UTF-8">
+    gtag('config', 'G-HMR9KFETRZ');
+  </script>
+<link rel="stylesheet" href="/assets/css/tailwind.css" />
+<meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>SecondHandCell - Trade-In Studio</title>
+    <title>SecondHandCell - Sell Your Device</title>
     <link rel="icon" href="/favicon/favicon.ico">
     
+    <!-- Font Awesome CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        shc: {
-                            primary: '#0071e3',
-                            secondary: '#40a0ff',
-                            bg: '#f8fafc', /* Super clean studio backdrop */
-                            text: '#1d1d1f',
-                            muted: '#6e6e73'
-                        }
-                    },
-                    fontFamily: {
-                        sans: ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Text', 'Helvetica Neue', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
 
-    <style type="text/tailwindcss">
-        @layer base {
-            body {
-                @apply bg-shc-bg text-shc-text antialiased;
-                background-image: radial-gradient(circle at 50% -20%, rgba(0, 113, 227, 0.05) 0%, transparent 50%);
-            }
-        }
-
-        @layer utilities {
-            .scrollbar-hide::-webkit-scrollbar { display: none; }
-            .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        }
-
-        @layer components {
-            /* * STUDIO SELECTION TILES 
-             * Overriding the JS-injected .select-card classes
-             */
-            .select-card {
-                @apply bg-white border-2 border-slate-100 rounded-2xl p-5 flex items-center justify-between font-bold text-slate-700 cursor-pointer transition-all duration-300 shadow-sm relative overflow-hidden;
-            }
-            .select-card:hover:not(.disabled) {
-                @apply border-slate-300 shadow-md -translate-y-1;
-            }
-            .select-card.active {
-                @apply border-shc-primary bg-blue-50 text-shc-primary shadow-md ring-4 ring-blue-500/10;
-            }
-            .select-card.active::after {
-                content: '\f00c';
-                font-family: "Font Awesome 6 Free";
-                @apply font-black text-shc-primary text-xl absolute right-5;
-            }
-            .select-card.disabled {
-                @apply opacity-50 bg-slate-50 border-slate-100 cursor-not-allowed hover:transform-none hover:shadow-sm hover:border-slate-100 grayscale;
-            }
-            .select-card-title {
-                @apply text-lg z-10;
-            }
+    <style>
+        :root {
+            --brand-primary: #0071e3;
+            --brand-secondary: #40a0ff;
+            --brand-gradient: linear-gradient(180deg, #0077ed 0%, #0066cc 100%);
+            --text-main: #1d1d1f;
+            --text-muted: #6e6e73;
+            --bg-gray: #f5f5f7;
+            --white: #FFFFFF;
+            --border: rgba(0,0,0,0.08);
+            --header-height: 80px; 
             
-            /* Brand specific overrides */
-            .brand-select-card {
-                @apply flex-col justify-center gap-4 py-10;
-            }
-            .brand-select-card.active::after {
-                @apply top-4 right-4 text-base;
-            }
-            .brand-logo-full {
-                @apply h-14 w-auto object-contain drop-shadow-sm;
-            }
-            .brand-fallback-label {
-                @apply text-xl font-extrabold;
-            }
+            --progress-track: rgba(0, 113, 227, 0.12);
+            --progress-fill: #0071e3;
+            
+            --neon-red: #ff3131;
+        }
 
-            /* Timeline Crumbs */
-            .crumb {
-                @apply px-4 py-3 rounded-xl bg-white border border-slate-200 text-sm font-bold text-slate-400 transition-all duration-300 flex-shrink-0 cursor-pointer hover:bg-slate-50 shadow-sm whitespace-nowrap text-left flex items-center gap-3;
-            }
-            .crumb::before {
-                content: '\f111'; /* empty circle */
-                font-family: "Font Awesome 6 Free";
-                @apply text-[10px];
-            }
-            .crumb.filled {
-                @apply bg-blue-50 border-blue-100 text-blue-700;
-            }
-            .crumb.filled::before {
-                content: '\f058'; /* check circle */
-                @apply text-blue-500;
-            }
-            .crumb.active {
-                @apply bg-shc-primary border-shc-primary text-white shadow-[0_8px_20px_rgba(0,113,227,0.3)] scale-105 origin-left;
-            }
-            .crumb.active::before {
-                content: '\f192'; /* dot circle */
-                @apply text-white;
-            }
+        .bg-brand-primary { background-color: var(--brand-primary); }
+        .text-brand-primary { color: var(--brand-primary); }
 
-            /* Global Buttons */
-            .btn-primary {
-                @apply w-full bg-shc-primary text-white font-black text-lg py-4 px-6 rounded-2xl transition-all duration-300 hover:bg-blue-700 hover:shadow-[0_12px_24px_rgba(0,113,227,0.3)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-none;
-            }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            background:
+                radial-gradient(1200px circle at 50% -10%, rgba(0, 113, 227, 0.09), transparent 42%),
+                linear-gradient(180deg, #fbfbfd 0%, #f5f5f7 28%, #f5f5f7 100%);
+            color: var(--text-main);
+        }
+        
+        /* Material Progress Bar - Redesigned Positioning */
+        @keyframes progress-bar-stripes {
+            0% { background-position: 0 0; }
+            to { background-position: 2rem 0; }
+        }
 
-            /* Modals */
+        .mat-progress-bar {
+            position: absolute;
+            top: 100%; /* Sits exactly at the bottom edge of the nav bar */
+            left: 0;
+            width: 100%;
+            height: 7px !important;
+            background-color: var(--progress-track); 
+            overflow: hidden;
+            z-index: 50;
+            display: block;
+            margin: 0;
+            padding: 0;
+            border: none;
+            backdrop-filter: blur(8px);
+        }
+
+        .mat-progress-bar-fill {
+            height: 100%;
+            width: 10%; /* Managed by JS */
+            background: linear-gradient(90deg, #0071e3 0%, #4aa8ff 100%);
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        /* Stripes logic */
+        .mat-progress-bar-fill::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            animation: progress-bar-stripes 1s linear infinite !important;
+            background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.22) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.22) 50%, rgba(255, 255, 255, 0.22) 75%, transparent 75%, transparent);
+            background-size: 2rem 2rem;
+        }
+
+        /* Spacing content to move below the header and progress bar */
+        .sell-app-wrapper { 
+            min-height: 60vh; 
+            padding-top: 42px; /* Header + progress bar */
+            padding-bottom: 96px;
+            background:
+                radial-gradient(1100px circle at 50% -8%, rgba(0, 113, 227, 0.10), transparent 38%),
+                radial-gradient(900px circle at 12% 10%, rgba(255, 255, 255, 0.75), transparent 44%),
+                linear-gradient(180deg, rgba(251, 251, 253, 0.98) 0%, rgba(245, 245, 247, 0.98) 100%);
+        }
+        
+        .app-container { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+        .selection-stage {
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+            padding: 0;
+            backdrop-filter: none;
+            max-width: 1120px;
+            margin: 0 auto;
+        }
+        .selection-stage.precondition-step {
+            background: transparent;
+            border-color: transparent;
+            box-shadow: none;
+            padding-top: 0;
+            min-height: calc(100vh - 190px);
+            display: flex;
+            align-items: center;
+        }
+        @media (min-width: 640px) {
+            .selection-stage {
+                padding: 0;
+            }
+            .selection-stage.precondition-step {
+                padding: 0;
+            }
+        }
+        .step-indicator {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 28px;
+            padding: 0 15px;
+            border-radius: 9999px;
+            border: 1px solid rgba(0, 113, 227, 0.16);
+            background: rgba(0, 113, 227, 0.08);
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: #0071e3;
+            margin: 2px 0 14px;
+        }
+        .step-title {
+            font-size: 31px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 12px;
+            color: var(--text-main);
+            letter-spacing: -0.045em;
+            line-height: 1.04;
+        }
+        @media (min-width: 640px) { .step-title { font-size: 42px; } }
+
+        .selection-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: stretch; }
+        .selection-stage.precondition-step .selection-grid {
+            gap: 14px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        }
+        .brand-grid-two {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            max-width: 560px !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+        }
+        @media (max-width: 639px) {
+            .brand-grid-two {
+                max-width: 100% !important;
+            }
+            .brand-grid-three .select-card:nth-child(3) {
+                grid-column: 1 / -1;
+                justify-self: center;
+                width: 100%;
+                max-width: calc((100% - 15px) / 2);
+            }
+        }
+        .select-card {
+            background: rgba(255,255,255,0.88);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 14px 14px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+            font-weight: 750;
+            display: flex;
+            min-width: 0;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 22px -20px rgba(0, 0, 0, 0.12);
+            min-height: 82px;
+            backdrop-filter: blur(10px) saturate(160%);
+        }
+        .select-card:hover:not(.disabled) {
+            border-color: rgba(0, 113, 227, 0.28);
+            transform: translateY(-2px);
+            box-shadow: 0 20px 38px -30px rgba(0, 113, 227, 0.18);
+        }
+        .select-card.active {
+            border-color: rgba(0, 113, 227, 0.62);
+            background: linear-gradient(180deg, rgba(250,253,255,0.94) 0%, rgba(241,248,255,0.94) 100%);
+            color: #0f3b75;
+            box-shadow: 0 22px 44px -34px rgba(0, 113, 227, 0.28);
+        }
+        .selection-stage.precondition-step .select-card {
+            min-height: 84px;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 14px 14px;
+            border-radius: 20px;
+            border-color: rgba(0, 0, 0, 0.07);
+            box-shadow: 0 14px 28px -24px rgba(0, 0, 0, 0.13);
+            transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, background-color 0.18s ease;
+        }
+        .selection-stage.precondition-step .select-card:hover:not(.disabled) {
+            transform: translateY(-2px);
+            border-color: rgba(0, 113, 227, 0.28);
+            box-shadow: 0 24px 46px -34px rgba(0, 113, 227, 0.22);
+        }
+        .selection-stage.precondition-step .select-card.active {
+            background: linear-gradient(180deg, rgba(251,254,255,0.96) 0%, rgba(240,247,255,0.96) 100%);
+            border-color: rgba(0, 113, 227, 0.62);
+            color: #0f172a;
+            box-shadow: 0 26px 50px -36px rgba(0, 113, 227, 0.26);
+        }
+        .selection-stage.precondition-step .select-card.disabled {
+            background: rgba(250,250,252,0.72);
+            border-style: solid;
+        }
+        .selection-stage.precondition-step .select-card.step-brand-card {
+            min-height: 94px;
+            justify-content: center;
+        }
+        .selection-stage.precondition-step .select-card-body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+        }
+        .selection-stage.precondition-step .select-card-copy {
+            min-width: 0;
+            flex: 1;
+        }
+        .selection-stage.precondition-step .select-card-icon,
+        .selection-stage.precondition-step .select-card-kicker,
+        .selection-stage.precondition-step .select-card-title {
+            display: block;
+            font-size: 18px;
+            line-height: 1.08;
+            font-weight: 900;
+            letter-spacing: -0.03em;
+            color: #0f172a;
+        }
+        .selection-stage.precondition-step .select-card-helper {
+            display: none;
+        }
+        .selection-stage.precondition-step .select-card-corner {
+            display: none;
+        }
+
+        .select-card.disabled { 
+            opacity: 0.6; 
+            cursor: help; 
+            background: #f9fafb; 
+            border-style: dashed; 
+            filter: grayscale(0.5);
+        }
+
+        .shc-tooltip {
+            visibility: hidden;
+            background-color: #1e293b;
+            color: #ffffff;
+            text-align: center;
+            border-radius: 8px;
+            padding: 10px 14px;
+            position: absolute;
+            z-index: 50;
+            bottom: 115%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 220px;
+            font-size: 12px;
+            line-height: 1.4;
+            font-weight: 600;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s, transform 0.2s;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+        }
+
+        .shc-tooltip::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -6px;
+            border-width: 6px;
+            border-style: solid;
+            border-color: #1e293b transparent transparent transparent;
+        }
+
+        .select-card.disabled:hover .shc-tooltip {
+            visibility: visible;
+            opacity: 1;
+            transform: translateX(-50%) translateY(-5px);
+        }
+
+        .breadcrumbs-group { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 20px; margin-bottom: 0; }
+        .breadcrumbs { display: flex; gap: 10px; font-size: 13px; justify-content: center; flex-wrap: wrap; }
+        .breadcrumbs--labels { display: none; }
+        .breadcrumbs--labels .crumb {
+            background: transparent;
+            color: #8a8a8f;
+            cursor: default;
+            padding: 0;
+        }
+        .crumb {
+            padding: 8px 14px;
+            background: rgba(255,255,255,0.76);
+            border: 1px solid rgba(0,0,0,0.07);
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: 0.2s;
+            backdrop-filter: blur(10px);
+        }
+        .crumb.active { background: #0071e3; color: white; border-color: #0071e3; cursor: default; box-shadow: 0 12px 26px -20px rgba(0, 113, 227, 0.45); }
+        .crumb.filled { background: rgba(240,247,255,0.96); color: #0071e3; border: 1px solid rgba(0, 113, 227, 0.2); }
+        .breadcrumbs--labels .crumb.active {
+            color: #0071e3;
+        }
+
+        .price-val { font-size: 52px; font-weight: 800; margin: 12px 0; color: var(--brand-primary); line-height: 0.96; letter-spacing: -0.05em; }
+        @media (min-width: 640px) { .price-val { font-size: 66px; } }
+        .req-box {
+            text-align: left;
+            background: rgba(255,255,255,0.78);
+            padding: 22px;
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            box-shadow: 0 20px 44px -38px rgba(0, 0, 0, 0.16);
+            backdrop-filter: blur(14px) saturate(150%);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 16px;
+            margin-bottom: 15px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+            background: rgba(255,255,255,0.9);
+            color: var(--text-main);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.75);
+        }
+        .form-control:focus {
+            border-color: rgba(0, 113, 227, 0.45);
+            box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.12);
+            background: rgba(255,255,255,0.98);
+        }
+        
+        /* Neon Red Error Highlights */
+        .form-control.error-highlight {
+            border-color: var(--neon-red) !important;
+            box-shadow: 0 0 12px var(--neon-red) !important;
+        }
+        .error-label {
+            color: var(--neon-red);
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+            text-align: left;
+            display: none;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 16px 20px;
+            background: var(--brand-gradient);
+            color: white;
+            border: none;
+            border-radius: 18px;
+            font-size: 17px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.22s ease;
+            box-shadow: 0 18px 38px -24px rgba(0, 113, 227, 0.38);
+            letter-spacing: -0.01em;
+        }
+        .btn-primary:hover {
+            opacity: 0.98;
+            transform: translateY(-1px);
+            box-shadow: 0 24px 46px -28px rgba(0, 113, 227, 0.46);
+            background: linear-gradient(180deg, #0077ed 0%, #0066cc 100%);
+        }
+
+        .brand-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        .brand-select-card {
+            padding: 0;
+            overflow: hidden;
+            position: relative;
+            aspect-ratio: 1.7 / 1;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .brand-logo-full {
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+            max-height: 44px;
+            padding: 0 16px;
+            filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.08));
+        }
+        .brand-fallback-label {
+            display: none;
+        }
+        @media (min-width: 640px) {
+            .brand-select-card { min-height: 96px; }
+            .brand-logo-full { max-height: 46px; }
+        }
+        @media (max-width: 640px) {
+            #grid-content .brand-select-card {
+                min-height: 118px !important;
+                height: 118px !important;
+                aspect-ratio: auto !important;
+            }
+            #grid-content .brand-logo-full {
+                width: auto !important;
+                height: auto !important;
+                max-width: calc(100% - 36px) !important;
+                max-height: 58px !important;
+                padding: 0 !important;
+            }
+        }
+        .brand-fallback-label {
+            display: none;
+            padding: 0 14px;
+            font-size: 18px;
+            font-weight: 950;
+            letter-spacing: -0.01em;
+            color: var(--text-main);
+            line-height: 1.1;
+        }
+        .confirm-device-img {
+            width: 150px;
+            height: 150px;
+            object-fit: contain;
+        }
+
+        /* MODAL ANIMATIONS AND NEATER STYLING */
+        .modal-overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.4); 
+            display: none; justify-content: center; align-items: center; 
+            z-index: 2000;
+            padding: 16px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            backdrop-filter: blur(6px); /* Blurs background for high-end look */
+            animation: fadeIn 0.2s ease-out;
+        }
+        .modal-card { 
+            background: rgba(255,255,255,0.9); padding: 34px; border-radius: 30px; 
+            text-align: center; max-width: 440px; width: 100%; 
+            max-height: calc(100vh - 32px);
+            overflow-y: auto;
+            border: 1px solid rgba(0,0,0,0.08);
+            box-shadow: 0 36px 70px -42px rgba(0, 0, 0, 0.28);
+            backdrop-filter: blur(20px) saturate(165%);
+            animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); /* Bounce slide up */
+        }
+        .qty-modal-card {
+            max-width: 470px;
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: 30px;
+            box-shadow: 0 40px 76px -48px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,248,250,0.9) 100%);
+            padding: 34px 30px 26px;
+        }
+        .qty-icon-wrap {
+            width: 58px;
+            height: 58px;
+            margin: 0 auto 16px;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #0071e3;
+            background: rgba(0, 113, 227, 0.08);
+            border: 1px solid rgba(0, 113, 227, 0.12);
+            font-size: 24px;
+        }
+        .qty-picker-row {
+            display: grid;
+            grid-template-columns: 56px minmax(84px, 1fr) 56px;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .qty-value-pill {
+            border-radius: 20px;
+            border: 1px solid rgba(0,0,0,0.08);
+            background: rgba(255,255,255,0.94);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 10px 22px -20px rgba(0, 0, 0, 0.18);
+            min-height: 58px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .qty-icon-btn {
+            width: 56px;
+            height: 56px;
+            border-radius: 18px;
+            border: 1px solid rgba(0,0,0,0.08);
+            color: #3a3a3c;
+            font-size: 21px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s ease;
+            background: rgba(255,255,255,0.94);
+            box-shadow: 0 10px 20px -18px rgba(0, 0, 0, 0.2);
+        }
+        .qty-icon-btn:hover {
+            border-color: rgba(0, 113, 227, 0.28);
+            color: #0071e3;
+            transform: translateY(-1px);
+        }
+        .qty-modal-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .qty-action-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .qty-row-btn {
+            width: 100%;
+            min-height: 46px;
+            border-radius: 12px;
+            border: 1px solid transparent;
+            font-size: 14px;
+            font-weight: 800;
+            transition: 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .qty-row-btn i {
+            font-size: 13px;
+        }
+        .qty-add-btn {
+            background: rgba(0, 113, 227, 0.08);
+            border-color: rgba(0, 113, 227, 0.15);
+            color: #005bbf;
+        }
+        .qty-add-btn:hover {
+            background: rgba(0, 113, 227, 0.14);
+            border-color: rgba(0, 113, 227, 0.24);
+        }
+        .qty-cancel-btn {
+            background: #fee2e2;
+            border-color: #fecaca;
+            color: #7f1d1d;
+        }
+        .qty-cancel-btn:hover {
+            background: #fecaca;
+            border-color: #fca5a5;
+        }
+        @media (max-width: 640px) {
             .modal-overlay {
-                @apply fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[2000] flex items-center justify-center p-4 transition-opacity duration-300;
+                align-items: flex-start;
+                padding: 12px;
             }
             .modal-card {
-                @apply bg-white rounded-[2.5rem] p-8 md:p-10 w-full max-w-md shadow-[0_30px_60px_rgba(0,0,0,0.2)] transform transition-transform duration-300 relative overflow-hidden;
-                animation: modalBounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+                padding: 20px;
+                border-radius: 16px;
+                max-height: calc(100vh - 24px);
+                margin: auto 0;
             }
-            @keyframes modalBounce {
-                0% { opacity: 0; transform: scale(0.9) translateY(20px); }
-                100% { opacity: 1; transform: scale(1) translateY(0); }
+            .qty-modal-card {
+                padding: 26px 18px 20px;
+                border-radius: 20px;
             }
+            .qty-picker-row {
+                gap: 12px;
+            }
+        }
 
-            /* Grid Structural Overrides for JS injection */
-            #grid-content {
-                @apply grid gap-4 w-full;
-            }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        
 
-            /* Final Editor Grids - forcing tags instead of full blocks */
-            #final-storage-grid, #final-lock-grid, #final-condition-grid {
-                display: flex !important;
+
+        .deeplink-loading {
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: 28px;
+            padding: 24px 18px;
+            background: linear-gradient(160deg, rgba(255,255,255,0.9) 0%, rgba(246,249,255,0.86) 65%);
+            text-align: center;
+            box-shadow: 0 24px 48px -36px rgba(0, 0, 0, 0.18);
+            max-width: 520px;
+            margin: 0 auto 16px;
+            backdrop-filter: blur(16px) saturate(160%);
+        }
+        .deeplink-loading-logo {
+            width: 140px;
+            height: auto;
+            margin: 0 auto 14px;
+            object-fit: contain;
+        }
+        .deeplink-loading-spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid rgba(0, 113, 227, 0.16);
+            border-top-color: #0071e3;
+            border-radius: 9999px;
+            margin: 0 auto 12px;
+            animation: deeplink-spin 0.9s linear infinite;
+        }
+        .deeplink-loading-title {
+            font-size: 18px;
+            font-weight: 900;
+            color: #1d1d1f;
+            margin-bottom: 6px;
+        }
+        .deeplink-loading-subtitle {
+            font-size: 13px;
+            color: var(--text-muted);
+            opacity: 0.92;
+        }
+        @keyframes deeplink-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .hidden { display: none !important; }
+
+        .scroll-target { scroll-margin-top: 150px; }
+
+        .device-preview-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(255,255,255,0.84);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 12px 14px;
+            box-shadow: 0 16px 32px -28px rgba(0, 0, 0, 0.14);
+            backdrop-filter: blur(14px) saturate(160%);
+        }
+        .device-preview-card img {
+            width: 56px;
+            height: 56px;
+            object-fit: contain;
+        }
+        #selected-device-preview.is-compact {
+            margin-bottom: 10px !important;
+        }
+        #selected-device-preview.is-compact .device-preview-card {
+            padding: 10px 14px;
+            gap: 12px;
+            border-radius: 16px;
+        }
+        #selected-device-preview.is-compact .device-preview-card img {
+            width: 48px;
+            height: 48px;
+        }
+        .cart-ready-card {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 14px;
+            align-items: center;
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: 24px;
+            padding: 14px 16px;
+            background: rgba(255,255,255,0.8);
+            box-shadow: 0 18px 36px -32px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(16px) saturate(160%);
+        }
+        .cart-ready-eyebrow {
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #0071e3;
+            margin-bottom: 6px;
+        }
+        .cart-ready-metrics {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .cart-ready-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            background: rgba(255,255,255,0.86);
+            border: 1px solid rgba(0, 113, 227, 0.12);
+            border-radius: 9999px;
+            color: #005bbf;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+        }
+        #continueToCheckoutBtn {
+            border: none;
+            border-radius: 16px;
+            padding: 13px 18px;
+            font-size: 15px;
+            font-weight: 700;
+            color: #ffffff;
+            background: var(--brand-gradient);
+            box-shadow: 0 18px 34px -24px rgba(0, 113, 227, 0.4);
+            transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+        }
+        #continueToCheckoutBtn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 24px 42px -28px rgba(0, 113, 227, 0.48);
+            opacity: 0.97;
+        }
+        .trend-card {
+            position: relative;
+            margin-top: 14px;
+            border-radius: 24px;
+            border: 1px solid rgba(0,0,0,0.08);
+            background: rgba(255,255,255,0.8);
+            box-shadow: 0 20px 40px -32px rgba(0, 0, 0, 0.16);
+            padding: 16px;
+            color: #3a3a3c;
+            backdrop-filter: blur(16px) saturate(160%);
+        }
+        .trend-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .trend-title {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 0.01em;
+            color: #1d1d1f;
+        }
+        .trend-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 8px;
+            border-radius: 9999px;
+            border: 1px solid rgba(0, 113, 227, 0.18);
+            color: #0071e3;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            background: rgba(0, 113, 227, 0.08);
+        }
+        .trend-direction {
+            font-size: 11px;
+            font-weight: 700;
+            margin-top: 2px;
+            color: #64748b;
+        }
+        .trend-direction.is-up {
+            color: #0071e3;
+        }
+        .trend-direction.is-down {
+            color: #f59e0b;
+        }
+        .trend-caption {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #64748b;
+            line-height: 1.35;
+        }
+        .trend-chart-wrap {
+            border-radius: 18px;
+            border: 1px solid rgba(0,0,0,0.07);
+            background: rgba(255,255,255,0.92);
+            padding: 8px;
+            min-height: 140px;
+        }
+        .trend-chart-wrap canvas {
+            width: 100% !important;
+            height: 120px !important;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.45s ease, transform 0.45s ease;
+        }
+        .trend-chart-wrap canvas.is-ready {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        @keyframes trendPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.22); }
+            50% { box-shadow: 0 0 0 6px rgba(37, 99, 235, 0); }
+        }
+        .trend-badge {
+            animation: trendPulse 2.4s ease-in-out infinite;
+        }
+        #offer-view .breadcrumbs {
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+        }
+        #offer-view {
+            margin-top: 0;
+            padding-top: 0;
+        }
+        #offer-view .breadcrumbs-group {
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 14px;
+        }
+        #offer-view .breadcrumbs-group > p {
+            margin: 0;
+            line-height: 1.2;
+        }
+        #offer-view .breadcrumbs,
+        #offer-view .breadcrumbs--labels {
+            justify-content: center;
+        }
+
+
+        #final-condition-grid {
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+            max-width: 100% !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            width: 100% !important;
+        }
+        #final-condition-grid .select-card {
+            min-height: 44px;
+            padding: 8px 6px;
+            font-size: 11px;
+            border-radius: 14px;
+        }
+        #condition-help-box {
+            max-width: none;
+            width: 100%;
+            margin-top: 14px !important;
+            padding: 18px !important;
+            background: linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(250,252,255,0.8) 100%);
+            border-radius: 28px !important;
+            border: 1px solid rgba(0,0,0,0.08) !important;
+            box-shadow: 0 22px 46px -36px rgba(0, 0, 0, 0.18);
+            backdrop-filter: blur(18px) saturate(160%);
+        }
+        .condition-help-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+            padding: 12px 14px;
+            background: rgba(255,255,255,0.9);
+            border: 1px solid rgba(0,0,0,0.07);
+            border-radius: 20px;
+        }
+        .condition-help-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 113, 227, 0.1);
+            color: #0071e3;
+            font-size: 18px;
+            flex: 0 0 auto;
+        }
+        .condition-help-details {
+            background: rgba(255,255,255,0.9);
+            border: 1px solid rgba(0,0,0,0.07);
+            border-radius: 22px;
+            padding: 16px 18px;
+        }
+        .condition-help-offer {
+            margin-top: 14px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 14px;
+            align-items: center;
+            border: 1px solid rgba(0, 113, 227, 0.14);
+            border-radius: 24px;
+            background: linear-gradient(135deg, rgba(245,249,255,0.94) 0%, rgba(255,255,255,0.92) 72%);
+            padding: 16px 18px;
+        }
+        .condition-help-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: min(100%, 240px);
+        }
+        #condition-help-box #help-condition-name {
+            font-size: 18px;
+            line-height: 1.08;
+        }
+        #condition-help-box ul {
+            margin: 0;
+            padding-left: 18px;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        #condition-help-box ul li + li {
+            margin-top: 8px;
+        }
+        #condition-offer-price {
+            font-size: 34px !important;
+            margin-top: 8px !important;
+        }
+        #conditionAcceptBtn {
+            min-height: 48px;
+            padding: 12px 16px;
+        }
+        .selection-stage.step-condition #grid-content.selection-grid {
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+            gap: 12px !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        .selection-stage.step-condition #grid-content.selection-grid .select-card {
+            min-height: 68px !important;
+            padding: 12px 10px !important;
+            font-size: 15px !important;
+            line-height: 1.25 !important;
+            border-radius: 16px !important;
+        }
+        .selection-stage.condition-active {
+            padding-top: 8px !important;
+            padding-bottom: 24px !important;
+        }
+        .selection-stage.condition-active .breadcrumbs-group {
+            margin-bottom: 10px !important;
+            gap: 8px !important;
+        }
+        .selection-stage.condition-active .breadcrumbs {
+            flex-wrap: nowrap;
+            gap: 8px;
+            overflow-x: auto;
+            white-space: nowrap;
+            justify-content: center;
+            max-width: 100%;
+            scrollbar-width: none;
+        }
+        .selection-stage.condition-active .breadcrumbs::-webkit-scrollbar {
+            display: none;
+        }
+        .selection-stage.condition-active .crumb {
+            flex: 0 0 auto;
+        }
+        .selection-stage.condition-active #grid-content.selection-grid {
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+            gap: 12px !important;
+        }
+        .selection-stage.condition-active #grid-content.selection-grid .select-card {
+            min-height: 68px !important;
+            padding: 12px 10px !important;
+            font-size: 15px !important;
+            line-height: 1.25 !important;
+            border-radius: 16px !important;
+        }
+        .selection-stage.condition-active #condition-help-box #help-condition-name {
+            font-size: 18px;
+            line-height: 1.1;
+        }
+        .selection-stage.condition-active #condition-help-box ul {
+            font-size: 14px;
+            line-height: 1.5;
+            padding-left: 18px;
+        }
+        .selection-stage.condition-active #condition-offer-price {
+            font-size: 40px !important;
+        }
+        .selection-stage.condition-active #conditionAcceptBtn {
+            min-height: 48px;
+            font-size: 16px;
+        }
+        @media (max-width: 768px) {
+            .selection-stage.condition-active .breadcrumbs {
                 flex-wrap: wrap;
-                gap: 0.5rem !important;
+                overflow-x: visible;
+                white-space: normal;
+                justify-content: center;
+                row-gap: 8px;
             }
-            #final-storage-grid .select-card, #final-lock-grid .select-card, #final-condition-grid .select-card {
-                @apply p-3 min-h-[auto] rounded-xl text-sm border-2 justify-center flex-row flex-grow-0;
-                flex-basis: auto;
+            .selection-stage.condition-active .crumb {
+                flex: 0 1 auto;
             }
-            #final-storage-grid .select-card.active::after, #final-lock-grid .select-card.active::after, #final-condition-grid .select-card.active::after {
-                display: none; /* Hide huge checkmarks on small final tags */
+            .selection-stage.condition-active #grid-content.selection-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                gap: 12px !important;
             }
-            #final-condition-grid .select-card {
-                flex-basis: 100%;
-                justify-content: space-between;
-                @apply px-4;
+            .selection-stage.condition-active #grid-content.selection-grid .select-card {
+                min-height: 68px !important;
+                padding: 10px 8px !important;
+                font-size: 14px !important;
+                line-height: 1.25 !important;
             }
-            #final-condition-grid .select-card.active::after {
-                display: block; /* Show on condition rows */
-                position: static;
+            .selection-stage.condition-active #grid-content.selection-grid.odd-last-full .select-card:last-child {
+                grid-column: 1 / -1 !important;
             }
+            .selection-stage.step-condition #grid-content.selection-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                gap: 12px !important;
+            }
+            .selection-stage.step-condition #grid-content.selection-grid.odd-last-full .select-card:last-child {
+                grid-column: 1 / -1 !important;
+            }
+        }
+        @media (max-width: 640px) {
+            .sell-app-wrapper {
+                padding-top: 58px;
+                padding-bottom: 56px;
+            }
+            .app-container { padding: 0 14px; }
+            .site-header__inner { flex-wrap: wrap; gap: 8px; }
+            .logo-image { width: 120px; height: auto; }
+            .selection-stage { padding: 12px 14px 18px; border-radius: 22px; }
+            .selection-grid,
+            #grid-content.selection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+            #grid-content.selection-grid.odd-last-full .select-card:last-child { grid-column: 1 / -1 !important; }
+            .breadcrumbs-group { margin-bottom: 10px; gap: 8px; }
+            .breadcrumbs { gap: 8px; }
+            .crumb { padding: 8px 12px; font-size: 12px; }
+            .step-title { font-size: 26px !important; margin-bottom: 10px !important; }
+            .step-subtitle { font-size: 14px !important; line-height: 1.5 !important; margin-bottom: 0; }
+            .selection-stage-heading { margin-bottom: 10px; }
+            .select-card { min-height: 68px; padding: 12px 10px; font-size: 14px; border-radius: 14px; }
+            #selected-device-preview .device-preview-card { padding: 11px 12px !important; gap: 10px !important; }
+            #selected-device-preview .device-preview-card img { width: 48px !important; height: 48px !important; }
+            #selected-device-name { font-size: 16px !important; line-height: 1.1 !important; }
+            .cart-ready-card { grid-template-columns: 1fr; gap: 10px; padding: 12px; }
+            .cart-ready-eyebrow { margin-bottom: 4px; }
+            .cart-ready-metrics { display: grid; grid-template-columns: 1fr; gap: 6px; }
+            .cart-ready-pill { justify-content: center; width: 100%; }
+            #continueToCheckoutBtn,
+            #startCheckoutBtn { width: 100%; }
+            #offer-view #final-quote-action-card { position: static; }
+            #final-quote-action-card { padding: 18px !important; }
+            .trend-card { padding: 12px; }
+            .trend-chart-wrap canvas { height: 110px !important; }
+            #final-condition-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+            #final-condition-grid .select-card:last-child { grid-column: 1 / -1 !important; }
+            #condition-help-box.hidden { display: none !important; }
+            #condition-help-box { max-width: none; padding: 16px !important; margin-top: 12px !important; }
+            .condition-help-header { padding: 10px 12px; gap: 10px; }
+            .condition-help-icon { width: 38px; height: 38px; font-size: 16px; }
+            #condition-help-box #help-condition-name { font-size: 18px; line-height: 1.15; }
+            .condition-help-details { padding: 14px 15px; }
+            #condition-help-box ul { font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+            .condition-help-offer { grid-template-columns: 1fr; padding: 14px 15px; }
+            .condition-help-actions { width: 100%; }
+            #condition-offer-price { font-size: 34px !important; }
+            #conditionAcceptBtn { min-height: 48px; font-size: 16px; }
+        }
 
-            /* Hide tooltip since tiles are self explanatory now */
-            .shc-tooltip { @apply hidden; }
+        .offer-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr);
+            gap: 24px;
+            align-items: start;
+        }
+        .offer-main-card,
+        .offer-side-card {
+            background: rgba(255,255,255,0.82);
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: 30px;
+            box-shadow: 0 26px 56px -40px rgba(0, 0, 0, 0.18);
+            backdrop-filter: blur(18px) saturate(160%);
+        }
+        .offer-main-card { padding: 30px; }
+        .offer-summary-row {
+            display: grid;
+            grid-template-columns: 88px minmax(0, 1fr);
+            gap: 18px;
+            align-items: center;
+            padding-bottom: 18px;
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+        }
+        .offer-summary-row img {
+            width: 88px !important;
+            height: 88px !important;
+        }
+        .offer-section-title {
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: #8a8a8f;
+            margin-bottom: 14px;
+        }
+        #final-device-name {
+            font-size: 36px !important;
+            line-height: 1.02 !important;
+            letter-spacing: -0.045em !important;
+        }
+        #summary-tags {
+            border-bottom: 0 !important;
+            padding-bottom: 0 !important;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .offer-side-stack {
+            display: grid;
+            gap: 16px;
+            position: sticky;
+            top: 110px;
+        }
+        #final-quote-action-card {
+            padding: 28px !important;
+            border-radius: 30px !important;
+            margin: 0 !important;
+        }
+        #condition-requirements-box {
+            margin: 0 !important;
+            border-radius: 30px !important;
+            padding: 22px !important;
+        }
+        .offer-lock-note {
+            background: rgba(0, 113, 227, 0.08);
+            border: 1px solid rgba(0, 113, 227, 0.15);
+            border-radius: 20px;
+            padding: 12px 14px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .offer-lock-note p {
+            margin: 0;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #005bbf;
+            font-weight: 600;
+        }
+        #price-trend-card { margin-top: 0; }
+        @media (max-width: 1023px) {
+            .offer-layout {
+                grid-template-columns: 1fr;
+                gap: 18px;
+            }
+            #offer-view {
+                margin-top: 0;
+            }
+            .offer-side-stack { position: static; }
+            .offer-main-card { padding: 20px; }
+            .offer-summary-row {
+                grid-template-columns: 72px minmax(0, 1fr);
+                gap: 12px;
+            }
+            .offer-summary-row img {
+                width: 72px !important;
+                height: 72px !important;
+            }
+            #final-device-name { font-size: 24px !important; }
+        }
+        @media (max-width: 640px) {
+            #final-condition-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+            #final-condition-grid .select-card:last-child {
+                grid-column: 1 / -1;
+            }
+            .offer-main-card,
+            #final-quote-action-card,
+            #condition-requirements-box {
+                border-radius: 20px !important;
+            }
+            #condition-requirements-box {
+                display: none !important;
+            }
+            #mobile-requirements-box {
+                display: block !important;
+                text-align: left;
+                margin: 0 0 18px;
+                padding: 14px 15px;
+                background: rgba(245,249,255,0.94);
+                border: 1px solid rgba(0, 113, 227, 0.14);
+                border-radius: 20px;
+            }
+            #mobile-condition-details {
+                margin: 0;
+            }
+        }
 
-            /* Site Chrome injections */
-            .mat-progress-bar { @apply h-1.5 bg-blue-100 shadow-sm relative z-50; }
-            .mat-progress-bar-fill { @apply h-full bg-gradient-to-r from-shc-secondary to-shc-primary shadow-[0_0_15px_rgba(0,113,227,0.5)]; }
+        .user-monogram {
+            display: flex; align-items: center; justify-content: center;
+            width: 2.5rem; height: 2.5rem; border-radius: 9999px;
+            background-color: rgba(0, 113, 227, 0.1); color: #0071e3; font-weight: 700; cursor: pointer;
+            font-size: 0.875rem; line-height: 1;
+        }
+
+        .selection-stage-heading {
+            max-width: 700px;
+            margin: 0 auto 10px;
+            text-align: center;
+        }
+        .selection-stage.precondition-step .selection-stage-heading {
+            margin-bottom: 10px;
+        }
+        .step-subtitle {
+            color: var(--text-muted);
+            font-size: 16px;
+            line-height: 1.6;
+            max-width: 640px;
+            margin: 0 auto;
+            letter-spacing: -0.01em;
+        }
+        @media (min-width: 640px) {
+            .step-subtitle {
+                font-size: 19px;
+            }
+        }
+        @media (max-width: 640px) {
+            .selection-stage.precondition-step .selection-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            .selection-stage.precondition-step .select-card {
+                min-height: 92px;
+                padding: 14px;
+                border-radius: 18px;
+            }
+            .selection-stage.precondition-step .select-card-title {
+                font-size: 18px;
+            }
+            .selection-stage.precondition-step .select-card-helper {
+                font-size: 12px;
+            }
+            .selection-stage.precondition-step .select-card-icon {
+                width: 38px;
+                height: 38px;
+                border-radius: 12px;
+            }
+        }
+
+        .sell-fresh-shell {
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        .sell-stage-split {
+            display: block;
+            width: 100%;
+        }
+        .sell-stage-sidebar,
+        .sell-stage-workspace {
+            min-width: 0;
+        }
+        .sell-sidebar-panel,
+        .sell-grid-shell,
+        .sell-offer-hero,
+        .sell-offer-editor {
+            background: rgba(255,255,255,0.78);
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: 30px;
+            box-shadow: 0 24px 52px -40px rgba(0,0,0,0.16);
+            backdrop-filter: blur(18px) saturate(160%);
+        }
+        .sell-sidebar-panel {
+            padding: 22px;
+            margin-bottom: 16px;
+        }
+        .sell-sidebar-panel:last-child {
+            margin-bottom: 0;
+        }
+        .sell-sidebar-kicker,
+        .sell-offer-kicker {
+            font-size: 11px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: #8a8a8f;
+            margin-bottom: 10px;
+        }
+        .sell-sidebar-title {
+            margin: 0;
+            font-size: 28px;
+            line-height: 1.02;
+            letter-spacing: -0.05em;
+            font-weight: 700;
+            color: #1d1d1f;
+        }
+        .sell-sidebar-copy {
+            margin: 12px 0 0;
+            font-size: 15px;
+            line-height: 1.6;
+            color: #6e6e73;
+        }
+        .sell-sidebar-points {
+            margin: 18px 0 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 10px;
+        }
+        .sell-sidebar-points li {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #515154;
+        }
+        .sell-sidebar-points i {
+            margin-top: 2px;
+            color: #0071e3;
+        }
+        .sell-stage-workspace {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 12px;
+            max-width: 1120px;
+            margin: 0 auto;
+        }
+        .sell-grid-shell {
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+            backdrop-filter: none;
+            padding: 0;
+        }
+        .sell-offer-shell {
+            display: grid;
+            gap: 18px;
+        }
+        .sell-offer-header {
+            max-width: 760px;
+            margin: 0 auto 6px;
+            text-align: center;
+        }
+        .sell-offer-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+            gap: 22px;
+            align-items: start;
+        }
+        .sell-offer-main,
+        .sell-offer-side {
+            min-width: 0;
+        }
+        .sell-offer-hero {
+            padding: 26px;
+            margin-bottom: 18px;
+        }
+        .sell-offer-editor {
+            padding: 22px;
+        }
+        .sell-offer-section-row {
+            display: grid;
+            gap: 18px;
+        }
+        .sell-edit-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+        }
+        .sell-edit-card-title {
+            margin: 0 0 10px;
+            font-size: 13px;
+            font-weight: 800;
+            color: #1d1d1f;
+            letter-spacing: -0.01em;
+        }
+        .sell-mini-grid {
+            display: grid;
+            gap: 10px;
+        }
+        .sell-mini-grid .select-card {
+            min-height: 58px;
+            border-radius: 18px;
+            padding: 12px 10px;
+            font-size: 13px;
+        }
+        .sell-offer-side .offer-side-stack {
+            position: static;
+        }
+        .sell-offer-summary-line {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 14px 0;
+            border-top: 1px solid rgba(0,0,0,0.07);
+        }
+        .sell-offer-summary-line:first-child {
+            border-top: 0;
+            padding-top: 0;
+        }
+        .sell-offer-summary-label {
+            font-size: 13px;
+            font-weight: 700;
+            color: #6e6e73;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+        }
+        .sell-offer-summary-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1d1d1f;
+            letter-spacing: -0.03em;
+        }
+        .sell-modal-title {
+            margin: 0 0 10px;
+            font-size: 32px;
+            line-height: 1;
+            letter-spacing: -0.05em;
+            color: #1d1d1f;
+            font-weight: 700;
+        }
+        .sell-modal-copy {
+            margin: 0 0 24px;
+            color: #6e6e73;
+            font-size: 15px;
+            line-height: 1.55;
+        }
+        @media (max-width: 1023px) {
+            .sell-offer-grid,
+            .sell-edit-grid {
+                grid-template-columns: 1fr;
+            }
+            .sell-offer-header {
+                margin-bottom: 4px;
+            }
+        }
+        @media (max-width: 640px) {
+            .sell-fresh-shell {
+                padding: 0 14px;
+            }
+            .sell-sidebar-panel,
+            .sell-grid-shell,
+            .sell-offer-hero,
+            .sell-offer-editor {
+                border-radius: 24px;
+                padding: 18px;
+            }
+            .sell-sidebar-title {
+                font-size: 24px;
+            }
+            .sell-modal-title {
+                font-size: 28px;
+            }
+            .selection-stage.precondition-step {
+                min-height: calc(100vh - 150px);
+                align-items: flex-start;
+            }
+        }
+        .sell-stage-sidebar {
+            display: none;
+        }
+        .selection-stage.step-condition {
+            min-height: auto;
+            display: block;
+        }
+        .selection-stage.step-condition .sell-stage-workspace {
+            display: grid;
+            gap: 16px;
         }
     </style>
-
+    <!-- Site Chrome logic -->
     <link rel="stylesheet" href="/assets/css/site-chrome.css">
     <script type="module">
       import { initSiteChrome } from "/assets/js/load-components.js";
       window.shcComponentsReady = window.shcComponentsReady || initSiteChrome();
     </script>
 </head>
-<body class="bg-shc-bg">
-
+<body class="bg-slate-50">
 <div id="site-header" data-component-slot="header"></div>
 
-<main class="min-h-[85vh] pt-12 pb-32 lg:pb-24">
-    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-        
-        <div id="selection-flow" class="flex flex-col lg:flex-row gap-8 lg:gap-16 w-full">
-            
-            <aside class="w-full lg:w-[340px] flex-shrink-0 flex flex-col gap-6 lg:sticky lg:top-28 h-max order-2 lg:order-1 relative z-40">
-                
-                <div class="bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-slate-100">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest">Studio Timeline</h3>
-                        <div id="step-indicator" class="text-xs font-bold text-shc-primary bg-blue-50 px-2 py-1 rounded-md"></div>
+<main class="sell-app-wrapper">
+    <div class="sell-fresh-shell">
+        <div class="app-container scroll-target selection-stage" id="selection-flow">
+            <div class="sell-stage-split">
+                <aside class="sell-stage-sidebar">
+                    <div class="sell-sidebar-panel">
+                        <div class="sell-sidebar-kicker">What happens here</div>
+                        <h2 class="sell-sidebar-title">Fast quote, no clutter.</h2>
+                        <p class="sell-sidebar-copy">We’ll keep the same logic underneath, but this view is now focused on one decision at a time.</p>
+                        <ul class="sell-sidebar-points">
+                            <li><i class="fa-solid fa-circle-check"></i><span>Select your exact device</span></li>
+                            <li><i class="fa-solid fa-circle-check"></i><span>Review condition requirements clearly</span></li>
+                            <li><i class="fa-solid fa-circle-check"></i><span>Accept your quote when you’re ready</span></li>
+                        </ul>
                     </div>
-                    <div id="crumbs" class="flex lg:flex-col gap-3 overflow-x-auto pb-4 lg:pb-0 scrollbar-hide"></div>
-                </div>
 
-                <div id="selected-device-preview" class="hidden bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-slate-100">
-                    <div class="flex items-center gap-5">
-                        <div class="w-20 h-20 bg-slate-50 rounded-2xl p-3 border border-slate-100 flex items-center justify-center flex-shrink-0 shadow-inner">
-                            <img id="selected-device-thumb" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="Device" loading="lazy" class="max-w-full max-h-full object-contain drop-shadow-md">
-                        </div>
-                        <div>
-                            <div class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Configuration</div>
-                            <div id="selected-device-name" class="font-black text-slate-800 leading-tight text-lg">--</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="sell-cart-summary" class="hidden fixed bottom-4 left-4 right-4 lg:static bg-shc-primary text-white rounded-[2rem] p-6 shadow-2xl lg:shadow-[0_12px_40px_rgba(0,113,227,0.25)] z-50">
-                    <div class="flex items-center justify-between lg:flex-col lg:items-start lg:gap-6">
-                        <div>
-                            <div class="flex items-center gap-2 text-[10px] font-bold text-blue-200 uppercase tracking-widest mb-1">
-                                <i class="fa-solid fa-wallet"></i> Current Value
+                    <div id="selected-device-preview" class="hidden">
+                        <div class="device-preview-card">
+                            <img id="selected-device-thumb" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="Selected device" loading="lazy">
+                            <div>
+                                <div class="text-xs font-bold uppercase tracking-widest text-slate-400">Selected Device</div>
+                                <div class="text-lg font-black text-slate-900" id="selected-device-name">--</div>
                             </div>
-                            <div id="sell-cart-total" class="text-3xl lg:text-4xl font-black tracking-tight">$0.00</div>
-                            <div id="sell-cart-count" class="text-sm font-medium text-blue-100 mt-1 bg-black/10 inline-block px-3 py-1 rounded-full backdrop-blur-sm">0 items ready</div>
-                        </div>
-                        <button id="continueToCheckoutBtn" class="bg-white text-shc-primary font-black px-6 py-4 lg:w-full rounded-xl hover:bg-blue-50 transition-colors shadow-lg active:scale-95">Checkout Now</button>
-                    </div>
-                </div>
-
-                <div class="hidden lg:flex flex-col gap-4 mt-2 px-2">
-                    <div class="flex items-center gap-4 text-sm font-semibold text-slate-500"><div class="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-shc-primary"><i class="fa-solid fa-box-open"></i></div> Free Shipping Kits</div>
-                    <div class="flex items-center gap-4 text-sm font-semibold text-slate-500"><div class="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-shc-primary"><i class="fa-solid fa-shield-halved"></i></div> Secure Data Wipe</div>
-                    <div class="flex items-center gap-4 text-sm font-semibold text-slate-500"><div class="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-shc-primary"><i class="fa-solid fa-bolt"></i></div> Same Day Payouts</div>
-                </div>
-            </aside>
-
-            <section class="flex-grow order-1 lg:order-2 flex flex-col pt-2 lg:pt-0 pb-16 lg:pb-0 z-10">
-                
-                <div class="mb-8 lg:mb-10">
-                    <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-500 mb-4 shadow-sm">
-                        <i class="fa-solid fa-circle text-[8px] text-green-500 animate-pulse"></i> Live Quote Generator
-                    </div>
-                    <h2 id="step-name" class="text-4xl lg:text-5xl font-black tracking-tight text-slate-900 mb-3">Select Brand</h2>
-                    <p id="step-subtitle" class="text-lg text-slate-500 font-medium">Choose your device line and answer a few quick questions.</p>
-                </div>
-
-                <div id="sell-deeplink-loading" class="hidden bg-white rounded-[2.5rem] border border-slate-100 p-16 text-center shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
-                    <div class="w-16 h-16 border-4 border-slate-100 border-t-shc-primary rounded-full animate-spin mx-auto mb-8 shadow-sm"></div>
-                    <p id="sell-deeplink-loading-title" class="font-black text-2xl text-slate-800 mb-2">Loading...</p>
-                    <p id="sell-deeplink-loading-subtitle" class="text-slate-500 font-medium">Fetching details from the matrix.</p>
-                    <img id="sell-deeplink-loading-logo" src="https://cdn.secondhandcell.com/images/assets/sellcell.webp" alt="Logo" class="hidden mt-8 h-8 mx-auto object-contain grayscale opacity-50">
-                </div>
-
-                <div id="grid-content" class="grid gap-4 w-full">
-                    </div>
-
-                <div id="condition-help-box" class="hidden mt-10 bg-gradient-to-br from-white to-slate-50 border-2 border-slate-100 rounded-[2.5rem] p-6 lg:p-10 shadow-[0_15px_40px_rgba(0,0,0,0.04)] relative overflow-hidden">
-                    <i class="fa-solid fa-clipboard-check absolute -right-6 -top-6 text-[120px] text-slate-100 rotate-12 pointer-events-none"></i>
-                    
-                    <div class="relative z-10 flex flex-col lg:flex-row justify-between lg:items-center gap-8 mb-8 border-b border-slate-200 pb-8">
-                        <div>
-                            <div class="flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
-                                <i class="fa-solid fa-magnifying-glass"></i> Inspection Status
-                            </div>
-                            <div id="help-condition-name" class="text-4xl font-black text-shc-primary">--</div>
-                            <div id="condition-offer-summary" class="text-sm font-medium text-slate-500 mt-2 bg-white px-3 py-1 inline-block border border-slate-200 rounded-lg">--</div>
-                        </div>
-                        <div class="text-left lg:text-right bg-white lg:bg-transparent p-5 lg:p-0 rounded-2xl border border-slate-100 lg:border-none shadow-sm lg:shadow-none">
-                            <div class="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Calculated Offer</div>
-                            <div id="condition-offer-price" class="text-5xl lg:text-6xl font-black text-slate-900 tracking-tight">--</div>
-                            <div id="condition-offer-device" class="text-xs font-bold text-slate-400 mt-2 line-clamp-1">--</div>
                         </div>
                     </div>
-                    
-                    <div class="relative z-10 mb-10 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                        <div class="text-sm font-black text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
-                            Required Checkpoints
-                        </div>
-                        <ul id="help-condition-desc" class="list-none space-y-3 text-slate-600 font-medium text-sm">
-                            </ul>
-                    </div>
-                    
-                    <div class="relative z-10 flex flex-col sm:flex-row gap-4">
-                        <button id="conditionAcceptBtn" class="btn-primary flex-1 shadow-[0_10px_20px_rgba(0,113,227,0.2)]">Lock In Offer</button>
-                        <a href="/sell/index.html" id="conditionResetBtn" class="px-8 py-4 rounded-2xl font-bold text-slate-500 bg-white border-2 border-slate-200 hover:bg-slate-50 text-center transition-all active:scale-95">Restart Quote</a>
-                    </div>
-                </div>
 
-            </section>
-        </div>
-
-
-        <div id="offer-view" class="hidden w-full max-w-6xl mx-auto">
-            
-            <div class="text-center mb-10 lg:mb-16">
-                <div class="inline-flex items-center justify-center gap-2 px-5 py-2 bg-green-50 border border-green-200 text-green-700 font-black uppercase tracking-wider rounded-full text-xs mb-6 shadow-sm">
-                    <i class="fa-solid fa-check-circle"></i> Offer Unlocked
-                </div>
-                <h2 class="text-4xl lg:text-6xl font-black tracking-tight text-slate-900 mb-6">Review Your Payout</h2>
-                <div id="final-crumb-labels" class="hidden"></div>
-                <div id="final-crumbs" class="flex flex-wrap justify-center gap-2"></div>
-            </div>
-
-            <div class="flex flex-col lg:flex-row gap-8 lg:gap-12 w-full">
-                
-                <div class="flex-grow flex flex-col gap-8 order-2 lg:order-1">
-                    <div class="bg-white rounded-[3rem] p-8 lg:p-12 shadow-[0_15px_50px_rgba(0,0,0,0.05)] border border-slate-100 relative overflow-hidden group">
-                        
-                        <div class="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-bl from-blue-50 to-transparent rounded-full blur-3xl -mr-40 -mt-40 pointer-events-none opacity-60"></div>
-                        
-                        <div class="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-8 border-b border-slate-100 pb-10">
-                            <div class="w-36 h-36 bg-white rounded-[2rem] p-4 border border-slate-100 flex-shrink-0 flex items-center justify-center shadow-[0_10px_30px_rgba(0,0,0,0.04)] group-hover:scale-105 transition-transform duration-500">
-                                <img id="final-device-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="Device" class="max-w-full max-h-full object-contain drop-shadow-md">
-                            </div>
-                            <div class="text-center sm:text-left flex-grow">
-                                <h3 id="final-device-name" class="text-3xl lg:text-5xl font-black text-slate-900 mb-4 tracking-tight leading-none">--</h3>
-                                <div id="summary-tags" class="flex flex-wrap justify-center sm:justify-start gap-2 mb-8">
+                    <div id="sell-cart-summary" class="hidden">
+                        <div class="cart-ready-card">
+                            <div>
+                                <div class="cart-ready-eyebrow">Cart summary</div>
+                                <div class="cart-ready-metrics">
+                                    <div class="cart-ready-pill">
+                                        <i class="fa-solid fa-mobile-screen-button"></i>
+                                        <span id="sell-cart-count">0 devices</span>
                                     </div>
-                                
-                                <div class="bg-shc-bg border border-slate-200 rounded-[1.5rem] p-6 inline-block w-full sm:w-auto shadow-inner">
-                                    <div class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Guaranteed Cash Offer</div>
-                                    <div id="final-price" class="text-5xl lg:text-6xl font-black text-shc-primary tracking-tight">--</div>
+                                    <div class="cart-ready-pill">
+                                        <i class="fa-solid fa-wallet"></i>
+                                        <span id="sell-cart-total">$0 total payout</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-
-                        <div id="condition-requirements-box" class="relative z-10 mt-10 bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                            <div class="text-sm font-black text-slate-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-list-check text-shc-primary"></i> <span id="condition-title-display"></span> Checklist</div>
-                            <ul id="condition-details" class="list-disc pl-5 space-y-2 text-slate-600 font-medium text-sm"></ul>
-                        </div>
-
-                        <div id="trend-card" class="hidden relative z-10 mt-6 bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
-                            <div class="flex justify-between items-center mb-6">
-                                <div>
-                                    <div class="font-black text-slate-900">Market Price Trend</div>
-                                    <div id="trend-direction-copy" class="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Live Analysis</div>
-                                </div>
-                                <span id="trend-badge-copy" class="text-[10px] font-black uppercase tracking-widest bg-blue-50 border border-blue-100 text-shc-primary px-3 py-1.5 rounded-lg shadow-inner">Market</span>
-                            </div>
-                            <div class="h-[120px] w-full">
-                                <canvas id="trend-chart-canvas"></canvas>
-                            </div>
-                            <div id="trend-caption-copy" class="text-[11px] font-medium text-slate-400 mt-4 text-center"></div>
+                            <button id="continueToCheckoutBtn">Continue to checkout</button>
                         </div>
                     </div>
-                </div>
+                </aside>
 
-                <div class="w-full lg:w-[400px] flex-shrink-0 flex flex-col gap-6 order-1 lg:order-2">
-                    
-                    <div id="final-quote-action-card" class="bg-slate-900 rounded-[2.5rem] p-8 text-center shadow-2xl relative overflow-hidden">
-                        <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none"></div>
+                <section class="sell-stage-workspace">
+                    <div class="selection-stage-heading">
+                        <h2 class="step-title" id="step-name">Select Brand</h2>
+                        <p class="step-subtitle" id="step-subtitle">Choose your device line and answer a few quick questions to get your quote.</p>
+                    </div>
 
-                        <div class="relative z-10">
-                            <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 border-b border-slate-800 pb-4 flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-lock text-shc-secondary"></i> Secure Your Quote
-                            </div>
-                            
-                            <div class="lg:hidden mb-8">
-                                <div id="mobile-offer-device" class="text-sm font-bold text-slate-400 mb-2">--</div>
-                                <div id="final-price-mobile" class="text-6xl font-black tracking-tight text-white mb-6">--</div>
-                                <div id="mobile-requirements-box" class="hidden bg-slate-800/50 border border-slate-700 rounded-2xl p-5 text-left backdrop-blur-sm">
-                                    <div class="text-[10px] font-black text-shc-secondary uppercase tracking-widest mb-3"><span id="mobile-condition-title"></span> Requirements</div>
-                                    <ul id="mobile-condition-details" class="list-disc pl-4 space-y-2 text-[13px] text-slate-300 font-medium"></ul>
-                                </div>
-                            </div>
+                    <div id="sell-deeplink-loading" class="deeplink-loading hidden" aria-live="polite" aria-busy="true">
+                        <img id="sell-deeplink-loading-logo" src="https://cdn.secondhandcell.com/images/assets/sellcell.webp" alt="SellCell" class="deeplink-loading-logo hidden" loading="lazy">
+                        <div class="deeplink-loading-spinner" aria-hidden="true"></div>
+                        <p class="deeplink-loading-title" id="sell-deeplink-loading-title">Loading device info from URL</p>
+                        <p class="deeplink-loading-subtitle" id="sell-deeplink-loading-subtitle">Hang tight while we fetch your quote details.</p>
+                    </div>
 
-                            <button id="startCheckoutBtn" class="w-full bg-shc-primary text-white font-black text-xl py-5 rounded-2xl hover:bg-blue-600 transition-all hover:scale-[1.02] active:scale-95 shadow-[0_15px_30px_rgba(0,113,227,0.3)] mb-6 border border-blue-500/50">Proceed to Checkout</button>
-                            
-                            <a href="/sell/index.html" id="resetFlowBtn" class="text-sm font-bold text-slate-400 hover:text-white transition-colors underline decoration-slate-600 underline-offset-4">Restart Quote</a>
+                    <div class="sell-grid-shell">
+                        <div class="selection-grid" id="grid-content">
+                            <div class="col-span-full text-center py-10 text-slate-400">Loading selections...</div>
                         </div>
                     </div>
 
-                    <div class="bg-white rounded-[2.5rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-slate-100">
-                        <div class="flex items-center gap-2 text-sm font-black text-slate-800 mb-8 pb-4 border-b border-slate-100">
-                            <i class="fa-solid fa-sliders text-shc-primary"></i> Edit Selections
+                    <div id="condition-help-box" class="hidden">
+                        <div class="condition-help-header">
+                            <div class="condition-help-icon">
+                                <i class="fa-solid fa-circle-check"></i>
+                            </div>
+                            <div>
+                                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.18em]">Selected Condition</div>
+                                <div class="font-black text-blue-700 text-2xl" id="help-condition-name">--</div>
+                                <div class="mt-1 text-sm text-slate-500" id="condition-offer-summary">--</div>
+                            </div>
                         </div>
-                        
-                        <div class="space-y-8">
+
+                        <div class="condition-help-details">
+                            <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Diagnostic Requirements</div>
+                            <ul id="help-condition-desc" class="list-disc pl-5 space-y-3 text-slate-600 text-sm leading-relaxed"></ul>
+                        </div>
+
+                        <div class="condition-help-offer">
                             <div>
-                                <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Capacity</div>
-                                <div id="final-storage-grid"></div>
+                                <div class="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">Estimated Payout</div>
+                                <div class="mt-2 text-sm text-slate-500" id="condition-offer-device">--</div>
+                                <div id="condition-offer-price" class="mt-3 text-5xl font-black tracking-tight text-blue-700">--</div>
                             </div>
-                            <div>
-                                <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Carrier</div>
-                                <div id="final-lock-grid"></div>
-                            </div>
-                            <div>
-                                <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Condition</div>
-                                <div id="final-condition-grid"></div>
+                            <div class="condition-help-actions">
+                                <button class="btn-primary w-full" id="conditionAcceptBtn" disabled>ACCEPT OFFER</button>
+                                <a href="/sell/index.html" id="conditionResetBtn" class="inline-flex items-center justify-center gap-2 text-sm font-bold text-blue-700 hover:underline">
+                                    <i class="fa-solid fa-arrow-left"></i> Start New Trade-in
+                                </a>
                             </div>
                         </div>
                     </div>
 
-                </div>
+                    <div class="breadcrumbs-group">
+                        <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">You can go back to any completed step.</p>
+                        <div class="breadcrumbs" id="crumbs"></div>
+                        <div class="step-indicator" id="step-indicator">Step 1 of 5</div>
+                    </div>
+                </section>
             </div>
         </div>
 
+        <div class="app-container hidden scroll-target" id="offer-view">
+            <div class="sell-offer-shell">
+                <div class="sell-offer-header">
+                    <div class="step-indicator">Your Quote</div>
+                    <h2 class="step-title" style="font-size:clamp(34px,4.5vw,56px);">Review your offer.</h2>
+                    <p class="step-subtitle" style="max-width:720px;">Check the details below and continue when you’re ready.</p>
+                </div>
+
+                <div class="breadcrumbs-group">
+                    <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">You can go back to any completed step.</p>
+                    <div class="breadcrumbs breadcrumbs--labels" id="final-crumb-labels"></div>
+                    <div class="breadcrumbs" id="final-crumbs"></div>
+                </div>
+
+                <div class="sell-offer-grid">
+                    <div class="sell-offer-main">
+                        <div class="sell-offer-hero offer-main-card">
+                            <div class="offer-summary-row">
+                                <img id="final-device-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="Selected device" loading="lazy" class="w-24 h-24 object-contain">
+                                <div class="offer-summary-copy">
+                                    <div class="sell-offer-kicker">Selected device</div>
+                                    <h2 id="final-device-name" class="text-3xl font-black text-slate-900 leading-tight">--</h2>
+                                    <div id="summary-tags" class="text-xs text-blue-700 font-bold uppercase tracking-widest mt-2"></div>
+                                </div>
+                            </div>
+
+                            <div class="sell-offer-section-row mt-6">
+                                <div class="sell-offer-summary-line">
+                                    <span class="sell-offer-summary-label">Current offer</span>
+                                    <span class="sell-offer-summary-value" id="final-price">--</span>
+                                </div>
+                            </div>
+
+                            <div id="trend-card" class="trend-card hidden mt-6">
+                                <div class="trend-header">
+                                    <div>
+                                        <h3 class="trend-title">Recent price movement</h3>
+                                        <div class="trend-direction" id="trend-direction-copy">Live pricing preview</div>
+                                    </div>
+                                    <span class="trend-badge" id="trend-badge-copy">Market</span>
+                                </div>
+                                <div class="trend-chart-wrap">
+                                    <canvas id="trend-chart-canvas" aria-label="Recent price trend" role="img"></canvas>
+                                </div>
+                                <div class="trend-caption" id="trend-caption-copy">Price trend updates when a complete quote is available.</div>
+                            </div>
+
+                            <div id="condition-requirements-box" class="req-box hidden mt-6">
+                                <div class="font-black text-slate-800 mb-4 pb-2 border-b flex items-center gap-2">
+                                    <i class="fa-solid fa-list-check text-blue-600"></i>
+                                    <span id="condition-title-display">--</span> Requirements:
+                                </div>
+                                <ul id="condition-details" class="list-disc pl-5 space-y-3 text-slate-600 text-sm leading-relaxed"></ul>
+                            </div>
+                        </div>
+
+                        <div class="sell-offer-editor">
+                            <div class="sell-offer-kicker">Adjust your quote</div>
+                            <div class="sell-edit-grid">
+                                <div>
+                                    <h3 class="sell-edit-card-title">Storage</h3>
+                                    <div id="final-storage-grid" class="selection-grid sell-mini-grid"></div>
+                                </div>
+                                <div>
+                                    <h3 class="sell-edit-card-title">Carrier status</h3>
+                                    <div id="final-lock-grid" class="selection-grid sell-mini-grid"></div>
+                                </div>
+                                <div>
+                                    <h3 class="sell-edit-card-title">Condition</h3>
+                                    <div id="final-condition-grid" class="selection-grid sell-mini-grid"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <aside class="sell-offer-side">
+                        <div class="offer-side-stack">
+                            <div id="final-quote-action-card" class="offer-side-card text-center">
+                                <div class="sell-offer-kicker">Final payout</div>
+                                <div id="mobile-offer-device" class="text-sm font-bold text-slate-700 mb-2 lg:hidden">--</div>
+                                <div class="price-val mb-4" id="final-price-mobile">--</div>
+                                <div id="mobile-requirements-box" style="display:none">
+                                    <div class="text-[10px] font-black text-blue-700 uppercase tracking-wider mb-1"><span id="mobile-condition-title">Condition</span> Requirements</div>
+                                    <ul id="mobile-condition-details" class="list-disc pl-5 space-y-1 text-[12px] text-slate-700"></ul>
+                                </div>
+
+                                <div class="space-y-4">
+                                    <button class="btn-primary" id="startCheckoutBtn">ACCEPT OFFER</button>
+                                    <div class="pt-1">
+                                        <a href="/sell/index.html" id="resetFlowBtn" class="text-blue-700 text-sm font-bold hover:underline inline-flex items-center gap-2">
+                                            <i class="fa-solid fa-arrow-left"></i> Start New Trade-in
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        </div>
     </div>
 </main>
 
-<div class="modal-overlay hidden" id="qty-modal">
-    <div class="modal-card">
-        <button class="absolute top-6 right-6 text-slate-400 hover:text-slate-700 text-xl" onclick="document.getElementById('qty-modal').style.display='none'">
-            <i class="fa-solid fa-xmark"></i>
-        </button>
-        <div class="w-20 h-20 bg-gradient-to-br from-blue-50 to-slate-100 text-shc-primary rounded-[1.5rem] flex items-center justify-center mb-8 shadow-inner border border-white text-3xl">
+<div class="modal-overlay" id="qty-modal">
+    <div class="modal-card qty-modal-card">
+        <div class="qty-icon-wrap">
             <i class="fa-solid fa-boxes-stacked"></i>
         </div>
-        <h3 class="text-3xl font-black text-slate-900 mb-3 tracking-tight">Quantity Editor</h3>
-        <p class="text-slate-500 font-medium mb-10 text-lg">How many of this exact configuration are you selling?</p>
+        <h3 class="sell-modal-title">How many are you sending?</h3>
+        <p class="sell-modal-copy">Set the quantity for this exact device configuration before moving to shipping.</p>
 
-        <div class="flex items-center justify-between bg-slate-50 rounded-[2rem] p-4 border border-slate-100 mb-10 shadow-inner">
-            <button id="qtyMinus" aria-label="Decrease" class="w-16 h-16 rounded-[1.5rem] bg-white border-2 border-slate-100 text-slate-800 font-black text-2xl hover:border-shc-primary hover:text-shc-primary transition-all active:scale-90 shadow-sm">
+        <div class="qty-picker-row">
+            <button id="qtyMinus" class="qty-icon-btn" aria-label="Decrease quantity">
                 <i class="fa-solid fa-minus"></i>
             </button>
-            <div id="qty-val" class="text-6xl font-black text-slate-900 tracking-tighter">1</div>
-            <button id="qtyPlus" aria-label="Increase" class="w-16 h-16 rounded-[1.5rem] bg-white border-2 border-slate-100 text-slate-800 font-black text-2xl hover:border-shc-primary hover:text-shc-primary transition-all active:scale-90 shadow-sm">
+            <div class="qty-value-pill">
+                <span id="qty-val" class="text-5xl font-black text-slate-900 leading-none">1</span>
+            </div>
+            <button id="qtyPlus" class="qty-icon-btn" aria-label="Increase quantity">
                 <i class="fa-solid fa-plus"></i>
             </button>
         </div>
 
-        <button id="finalSubmitBtn" class="btn-primary py-5 text-xl shadow-[0_15px_30px_rgba(0,113,227,0.25)] mb-6">Confirm Quantity</button>
-        <button id="addAnotherDeviceBtn" class="w-full py-4 rounded-2xl font-bold text-slate-600 bg-white border-2 border-slate-100 hover:bg-slate-50 hover:border-slate-300 transition-all">Add a Different Device</button>
+        <div class="qty-modal-actions">
+            <button class="btn-primary py-4 shadow-lg shadow-blue-100" id="finalSubmitBtn">
+                <i class="fa-solid fa-truck-fast mr-2"></i>PROCEED TO SHIPPING
+            </button>
+            <div class="qty-action-row">
+                <button class="qty-row-btn qty-add-btn" id="addAnotherDeviceBtn">
+                    <i class="fa-solid fa-circle-plus"></i>
+                    <span>Add another</span>
+                </button>
+                <button class="qty-row-btn qty-cancel-btn" onclick="document.getElementById('qty-modal').style.display='none'">
+                    <i class="fa-solid fa-circle-xmark"></i>
+                    <span>Cancel</span>
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
-<div class="modal-overlay hidden" id="device-confirm-modal" aria-hidden="true">
+<div class="modal-overlay" id="device-confirm-modal" aria-hidden="true">
     <div class="modal-card">
-        <div class="w-20 h-20 bg-blue-50 text-shc-primary rounded-[1.5rem] flex items-center justify-center mb-8 border border-blue-100 text-3xl shadow-sm">
-            <i class="fa-solid fa-magnifying-glass"></i>
+        <div class="w-16 h-16 bg-blue-50 text-blue-700 rounded-full flex items-center justify-center mx-auto mb-5 text-2xl">
+            <i class="fa-solid fa-circle-question"></i>
         </div>
-        <h3 class="text-3xl font-black text-slate-900 mb-3 tracking-tight">Verify Model</h3>
-        <p class="text-slate-500 font-medium mb-8 text-lg">Please ensure this is the exact device you possess.</p>
-        
-        <div class="bg-slate-50 rounded-[2rem] p-8 border border-slate-100 mb-8 shadow-inner flex flex-col items-center">
-            <img id="confirm-device-image" class="h-40 object-contain mb-6 drop-shadow-md" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" loading="lazy">
-            <p id="confirm-device-name" class="font-black text-slate-800 text-2xl text-center leading-tight">--</p>
-        </div>
-        
-        <div class="flex flex-col gap-4">
-            <button id="confirmDeviceYesBtn" class="btn-primary py-5 text-xl shadow-[0_10px_20px_rgba(0,113,227,0.2)]">Yes, This Is It</button>
-            <button id="confirmDeviceNoBtn" class="w-full py-4 rounded-2xl font-bold text-slate-500 bg-white border-2 border-slate-100 hover:bg-slate-50 hover:text-slate-700 transition-all">No, Choose Again</button>
+        <h3 class="sell-modal-title">Confirm the device</h3>
+        <p class="sell-modal-copy">Make sure this matches the phone you want to sell before we continue the quote.</p>
+        <img id="confirm-device-image" class="confirm-device-img mx-auto mb-4" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="Selected device preview" loading="lazy">
+        <p class="text-slate-800 font-semibold mb-8 text-sm leading-relaxed px-2" id="confirm-device-name">--</p>
+        <div class="space-y-3">
+            <button class="btn-primary py-5" id="confirmDeviceYesBtn">Yes, Continue</button>
+            <button class="w-full py-3 border-2 border-slate-200 rounded-xl text-slate-600 text-sm font-bold hover:bg-slate-50 transition-colors" id="confirmDeviceNoBtn">No, Go Back</button>
         </div>
     </div>
 </div>
@@ -1010,8 +2335,10 @@
             resolveImageUrl(state.deviceData?.imageUrl, imgEl);
             imgEl.alt = `${state.selections.modelName} preview`;
             nameEl.textContent = state.selections.modelName;
+            preview.classList.add('is-compact');
             preview.classList.remove('hidden');
         } else {
+            preview.classList.remove('is-compact');
             preview.classList.add('hidden');
         }
     };
@@ -1054,8 +2381,8 @@
         }
         const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
         const total = cart.reduce((sum, item) => sum + (item.unitPrice * item.qty), 0);
-        countEl.textContent = `${totalQty} item${totalQty === 1 ? '' : 's'} ready`;
-        totalEl.textContent = `$${total.toFixed(2)}`;
+        countEl.textContent = `${totalQty} device${totalQty === 1 ? '' : 's'} ready`;
+        totalEl.textContent = `$${total.toFixed(2)} total payout`;
         summary.classList.remove('hidden');
     };
     const addCurrentDeviceToCart = () => {
@@ -1363,7 +2690,7 @@
         if (isDisabled) {
             card.innerHTML = `
                 <i class="fa-solid fa-circle-info text-slate-400 mb-1"></i>
-                <span class="select-card-title">${label}</span>
+                <span>${label}</span>
                 <div class="shc-tooltip">Sorry, we don't have any offers for this variant.</div>
             `;
         } else {
@@ -1374,13 +2701,26 @@
                     <div class="select-card-body">
                         <div class="select-card-copy">
                             ${logo ? `<img class="brand-logo-full" src="${logo}" alt="${label} logo" loading="lazy">` : ''}
+                            <div class="brand-fallback-label">${label}</div>
                         </div>
                     </div>
                 `;
+
+                const img = card.querySelector('img');
+                const fallback = card.querySelector('.brand-fallback-label');
+                const showFallback = () => {
+                    if (img) img.style.display = 'none';
+                    if (fallback) fallback.style.display = 'block';
+                };
+                if (!logo) {
+                    showFallback();
+                } else if (img) {
+                    img.addEventListener('error', showFallback, { once: true });
+                }
             } else if (state.currentStep !== 'condition') {
                 card.innerHTML = `<span class="select-card-title">${label}</span>`;
             } else {
-                card.innerHTML = `<span class="select-card-title">${label}</span>`;
+                card.textContent = label;
             }
             card.onclick = () => handleSelectionRequested(value, label);
         }
@@ -1388,9 +2728,24 @@
     };
 
     const handleSelectionRequested = async (value, label) => {
-        // Keep every selection step as a direct click-through. The modal confirmation
-        // step was blocking model selections for some visitors.
-        handleSelection(value, label);
+        // Only confirm on model selection (needs a phone image).
+        if (state.currentStep !== 'model') {
+            handleSelection(value, label);
+            return;
+        }
+
+        try {
+            const modelData = await getModelDocData(state.selections.brand, value);
+            const fullBrand = BRAND_DISPLAY[state.selections.brand] || '';
+            const deviceName = `${fullBrand} ${label}`.trim();
+            pendingConfirmAction = () => handleSelection(value, label, modelData);
+            openDeviceConfirmModal(deviceName, modelData.imageUrl);
+        } catch (e) {
+            const fullBrand = BRAND_DISPLAY[state.selections.brand] || '';
+            const deviceName = `${fullBrand} ${label}`.trim();
+            pendingConfirmAction = () => handleSelection(value, label);
+            openDeviceConfirmModal(deviceName, '');
+        }
     };
 
     const handleSelection = async (value, label, preloadedModelData = null) => {
@@ -1512,17 +2867,7 @@
         const summaryBits = [];
         if (state.selections.lock) summaryBits.push(`Carrier: ${LOCK_LABELS[state.selections.lock] || state.selections.lock}`);
         if (state.selections.storage) summaryBits.push(`Capacity: ${state.selections.storage}`);
-        
-        // Update tags
-        const tagsContainer = document.getElementById('summary-tags');
-        tagsContainer.innerHTML = '';
-        summaryBits.forEach(bit => {
-            const span = document.createElement('span');
-            span.className = 'px-3 py-1 bg-blue-50 text-shc-primary rounded-lg border border-blue-100';
-            span.textContent = bit;
-            tagsContainer.appendChild(span);
-        });
-
+        document.getElementById('summary-tags').textContent = summaryBits.join(' • ');
         const mobileOfferDevice = document.getElementById('mobile-offer-device');
         if (mobileOfferDevice) mobileOfferDevice.textContent = summaryName || `${fullBrand} ${state.selections.modelName}`.trim();
         updateFinalDeviceImage();
@@ -1562,7 +2907,7 @@
         CONDITION_DEFS.forEach(c => {
             const card = document.createElement('div');
             card.className = `select-card ${state.selections.condition === c.key ? 'active' : ''}`;
-            card.innerHTML = `<span class="select-card-title">${c.name}</span>`;
+            card.textContent = c.name;
             card.onclick = () => {
                 state.selections.condition = c.key;
                 updateURL({ historyMode: 'replace' });
@@ -1571,6 +2916,8 @@
             };
             grid.appendChild(card);
         });
+        grid.classList.remove('grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'grid-cols-4', 'sm:grid-cols-3', 'md:grid-cols-4', 'max-w-[280px]', 'max-w-[500px]', 'max-w-[700px]', 'mx-auto');
+        grid.classList.add('grid-cols-5', 'w-full');
     };
     const renderStorageGrid = () => {
         const grid = document.getElementById('final-storage-grid');
@@ -1582,7 +2929,7 @@
             const enabled = Object.values(carrierMap).some((conditionMap) => Object.values(getConditionPriceMap(conditionMap || {})).some((value) => Number(value || 0) > 0));
             const card = document.createElement('div');
             card.className = `select-card ${state.selections.storage === storageKey ? 'active' : ''} ${enabled ? '' : 'disabled'}`;
-            card.innerHTML = `<span class="select-card-title">${storageKey}</span>`;
+            card.textContent = storageKey;
             if (enabled) {
                 card.onclick = () => {
                     state.selections.storage = storageKey;
@@ -1618,7 +2965,7 @@
             const enabled = Object.values(getConditionPriceMap(conditionPrices || {})).some((value) => Number(value || 0) > 0);
             const card = document.createElement('div');
             card.className = `select-card ${state.selections.lock === lockKey ? 'active' : ''} ${enabled ? '' : 'disabled'}`;
-            card.innerHTML = `<span class="select-card-title">${LOCK_LABELS[lockKey] || lockKey}</span>`;
+            card.textContent = LOCK_LABELS[lockKey] || lockKey;
             if (enabled) {
                 card.onclick = () => {
                     state.selections.lock = lockKey;
@@ -1762,12 +3109,11 @@
         const cond = CONDITION_DEFS.find(c => c.key === state.selections.condition);
         if (titleEl) titleEl.textContent = cond?.name || '--';
         if (helpNameEl) helpNameEl.textContent = cond?.name || '--';
-        const detailMarkup = (cond?.desc || []).map(d => `<li><i class="fa-solid fa-check text-shc-primary mr-2"></i> ${d}</li>`).join('');
-        const detailMarkupFinal = (cond?.desc || []).map(d => `<li>${d}</li>`).join('');
-        if (detailsEl) detailsEl.innerHTML = detailMarkupFinal;
+        const detailMarkup = (cond?.desc || []).map(d => `<li>${d}</li>`).join('');
+        if (detailsEl) detailsEl.innerHTML = detailMarkup;
         if (helpDetailsEl) helpDetailsEl.innerHTML = detailMarkup;
         if (mobileTitleEl) mobileTitleEl.textContent = cond?.name || 'Condition';
-        if (mobileDetailsEl) mobileDetailsEl.innerHTML = detailMarkupFinal;
+        if (mobileDetailsEl) mobileDetailsEl.innerHTML = detailMarkup;
         if (reqBox) reqBox.classList.remove('hidden');
         if (mobileReqBox) mobileReqBox.style.display = isSmallScreen() ? 'block' : 'none';
         if (checkoutBtn) {
@@ -1781,8 +3127,19 @@
 
     };
 
-    const continueToCheckout = async (source = 'offer_button') => {
-        trackSellEvent('sell_continue_to_checkout', { source });
+    document.getElementById('startCheckoutBtn').onclick = () => {
+        trackSellEvent('sell_offer_accepted', { step: 'final_offer' });
+        document.getElementById('qty-modal').style.display = 'flex';
+    };
+    document.getElementById('conditionAcceptBtn').onclick = () => {
+        trackSellEvent('sell_offer_accepted', { step: 'condition' });
+        document.getElementById('qty-modal').style.display = 'flex';
+    };
+    document.getElementById('conditionResetBtn').onclick = (e) => { e.preventDefault(); window.location.href = '/sell/index.html'; };
+    document.getElementById('qtyPlus').onclick = () => { state.selections.qty++; document.getElementById('qty-val').textContent = state.selections.qty; };
+    document.getElementById('qtyMinus').onclick = () => { if(state.selections.qty > 1) state.selections.qty--; document.getElementById('qty-val').textContent = state.selections.qty; };
+    document.getElementById('finalSubmitBtn').onclick = async () => {
+        trackSellEvent('sell_continue_to_checkout', { source: 'quantity_modal' });
         const cart = addCurrentDeviceToCart() || getCart();
         const progressEmail = normalizeEmail(currentUser?.email || getStoredEmail());
         if (isValidEmail(progressEmail)) {
@@ -1794,21 +3151,6 @@
         }
         navigatingToCheckout = true;
         window.location.href = '/sell/checkout.html';
-    };
-
-    document.getElementById('startCheckoutBtn').onclick = () => {
-        trackSellEvent('sell_offer_accepted', { step: 'final_offer' });
-        continueToCheckout('final_offer_button');
-    };
-    document.getElementById('conditionAcceptBtn').onclick = () => {
-        trackSellEvent('sell_offer_accepted', { step: 'condition' });
-        continueToCheckout('condition_offer_button');
-    };
-    document.getElementById('conditionResetBtn').onclick = (e) => { e.preventDefault(); window.location.href = '/sell/index.html'; };
-    document.getElementById('qtyPlus').onclick = () => { state.selections.qty++; document.getElementById('qty-val').textContent = state.selections.qty; };
-    document.getElementById('qtyMinus').onclick = () => { if(state.selections.qty > 1) state.selections.qty--; document.getElementById('qty-val').textContent = state.selections.qty; };
-    document.getElementById('finalSubmitBtn').onclick = async () => {
-        await continueToCheckout('quantity_modal');
     };
     document.getElementById('addAnotherDeviceBtn').onclick = async () => {
         trackSellEvent('sell_add_another_device');
@@ -1938,8 +3280,8 @@
         const logoEl = document.getElementById('sell-deeplink-loading-logo');
         const titleEl = document.getElementById('sell-deeplink-loading-title');
         const subtitleEl = document.getElementById('sell-deeplink-loading-subtitle');
-        const crumbsGroup = document.querySelector('#crumbs')?.parentElement;
-        const stepHeading = document.getElementById('step-name')?.parentElement;
+        const crumbsGroup = document.querySelector('#selection-flow .breadcrumbs-group');
+        const stepHeading = document.querySelector('#selection-flow .selection-stage-heading');
         const grid = document.getElementById('grid-content');
         if (!loadingEl || !crumbsGroup || !stepHeading || !grid) return;
 
@@ -2420,15 +3762,13 @@ if (!window[INIT_FLAG]) {
     bindAuthUi();
   }
 
-} 
+} // End of INIT_FLAG check
 </script>
 
-  <script>
-    window.shcDisableShip48Banner = true;
-  </script>
   <script type="module">
     await (window.shcComponentsReady || Promise.resolve());
     await window.shcLoadSharedSiteScripts?.({ includeAuth: false });
   </script>
+  <script type="module" src="/assets/js/live-chat-widget.js?v=20260329c"></script>
 </body>
 </html>
