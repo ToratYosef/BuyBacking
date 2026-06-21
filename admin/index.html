@@ -133,7 +133,6 @@
     import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
     import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, getDocsFromServer, query, where, orderBy, limit, startAfter, deleteDoc, serverTimestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
     import { getMessaging, getToken, onMessage, isSupported as isMessagingSupported } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-messaging.js";
-    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-functions.js";
     // ----------------------------
     // CONFIG
     // ----------------------------
@@ -149,9 +148,6 @@
     const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    const functions = getFunctions(app);
-    const sendLabelReminderEmailCallable = httpsCallable(functions, "sendLabelReminderEmail");
-    const sendReminderEmailCallable = httpsCallable(functions, "sendReminderEmail");
     let messaging = null;
     const API_BASE_URL = window.SHC_API_BASE_URL || "https://api.secondhandcell.com/server";
     const PRINT_API_BASE_URL = "https://api.secondhandcell.com";
@@ -1224,7 +1220,13 @@
       }
       const res = await withPerf(`network:api:${safeEndpoint}`, () => fetch(`${API_BASE_URL}${safeEndpoint}`, config));
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message || data.error || "API Request Failed");
+      if (!res.ok) {
+        const err = new Error(data.message || data.error || "API Request Failed");
+        err.status = res.status;
+        err.code = data.code || data.errorCode || data.status || "";
+        err.data = data;
+        throw err;
+      }
       return data;
     }
     const apiGet = (p) => apiCall(p, "GET");
@@ -4307,8 +4309,28 @@
       toast("Shipping kit bundle opened in a new tab", "success");
     }
 
-    function getCallableErrorCode(error) {
-      return String(error?.code || error?.details?.code || error?.message || "").toLowerCase();
+    function getApiErrorCode(error) {
+      return String(error?.code || error?.data?.code || error?.data?.errorCode || error?.data?.status || error?.message || "").toLowerCase();
+    }
+
+    function isMissingReminderEndpointError(error) {
+      const status = Number(error?.status || error?.data?.status || 0);
+      const code = getApiErrorCode(error);
+      return status === 404 || status === 405 || status === 501 || code.includes("not-found") || code.includes("not found") || code.includes("unimplemented");
+    }
+
+    async function postLabelReminderEmailViaApi(orderId, tier) {
+      const normalizedTier = Number(tier);
+      const payload = { orderId, tier: normalizedTier, reminderTier: normalizedTier };
+      const primaryEndpoint = `/orders/${orderId}/send-label-reminder-email`;
+      const fallbackEndpoint = `/orders/${orderId}/send-reminder-email`;
+
+      try {
+        return await apiPost(primaryEndpoint, payload);
+      } catch (primaryError) {
+        if (!isMissingReminderEndpointError(primaryError)) throw primaryError;
+        return await apiPost(fallbackEndpoint, payload);
+      }
     }
 
     async function sendLabelReminderEmailForOrder(orderId, tier) {
@@ -4330,19 +4352,8 @@
       render();
 
       try {
-        let result;
-        try {
-          result = await sendLabelReminderEmailCallable({ orderId, tier: normalizedTier });
-        } catch (primaryError) {
-          const primaryCode = getCallableErrorCode(primaryError);
-          if (primaryCode.includes("not-found") || primaryCode.includes("unimplemented") || primaryCode.includes("internal")) {
-            result = await sendReminderEmailCallable({ orderId, reminderTier: normalizedTier });
-          } else {
-            throw primaryError;
-          }
-        }
-
-        const data = result?.data || {};
+        const response = await postLabelReminderEmailViaApi(orderId, normalizedTier);
+        const data = response?.data || response || {};
         const subject = data.subject || data.emailSubject || `Label reminder tier ${data.reminderTier || normalizedTier}`;
         const returnedTier = data.reminderTier || data.tier || normalizedTier;
         toast(`Sent reminder tier ${returnedTier}: ${subject}`, "success");
@@ -4358,9 +4369,11 @@
 
         return { ok: true, data };
       } catch (error) {
-        const code = getCallableErrorCode(error);
-        if (code.includes("failed-precondition")) {
+        const code = getApiErrorCode(error);
+        if (code.includes("failed-precondition") || code.includes("failed precondition")) {
           toast("This reminder can only be sent while the order is label generated.", "error");
+        } else if (isMissingReminderEndpointError(error)) {
+          toast("Label reminder API route was not found on the backend.", "error");
         } else {
           toast(error?.message || "Failed to send label reminder email.", "error");
         }
