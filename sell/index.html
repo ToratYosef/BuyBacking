@@ -165,6 +165,36 @@
             #grid-content {
                 @apply grid gap-4 w-full;
             }
+            #selection-flow.step-condition #grid-content {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            #selection-flow.step-condition #grid-content .select-card {
+                min-height: 4.75rem;
+                padding: 0.95rem 2.75rem 0.95rem 1rem;
+                align-items: center;
+            }
+            #selection-flow.step-condition #grid-content .select-card-title {
+                font-size: 0.82rem;
+                line-height: 1.15;
+                letter-spacing: -0.01em;
+            }
+            #selection-flow.step-condition #grid-content .select-card.active::after {
+                right: 1rem;
+                font-size: 0.95rem;
+            }
+            @media (min-width: 1024px) {
+                #selection-flow.step-condition #grid-content {
+                    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+                    max-width: none !important;
+                    margin-left: 0 !important;
+                    margin-right: 0 !important;
+                }
+            }
+            @media (min-width: 1280px) {
+                #selection-flow.step-condition #grid-content .select-card-title {
+                    font-size: 0.9rem;
+                }
+            }
 
             /* Final Editor Grids - forcing tags instead of full blocks */
             #final-storage-grid, #final-lock-grid, #final-condition-grid {
@@ -680,6 +710,7 @@
     const FALLBACK_DEVICE_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
     const CART_STORAGE_KEY = 'shc_cart';
     const EMAIL_STORAGE_KEY = 'shc_quote_email';
+    const SELL_PROGRESS_CACHE_KEY = 'shc_sell_progress_cache_v2';
     const MODELS_CACHE_KEY = 'shc_models_cache_v2';
     const MODELS_CACHE_TTL_MS = 3 * 60 * 1000;
     const SELL_PROGRESS_COLLECTION = 'sellOrderProgress';
@@ -985,8 +1016,12 @@
             return [];
         }
     };
+    const clearCheckoutProgressCache = () => {
+        try { localStorage.removeItem(SELL_PROGRESS_CACHE_KEY); } catch (_) {}
+    };
     const saveCart = (cart) => {
         localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+        clearCheckoutProgressCache();
     };
     const hasImageExtension = (url) => /\.(png|jpe?g|webp)(\?.*)?$/i.test(url || '');
     const resolveImageUrl = (baseUrl, imgEl) => {
@@ -1244,7 +1279,7 @@
         const widthClasses = ['max-w-[280px]', 'max-w-[500px]', 'max-w-[700px]', 'mx-auto'];
         const stepHeading = document.getElementById('step-heading-wrap') || document.getElementById('step-name')?.parentElement;
 
-        grid.classList.remove('grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'sm:grid-cols-3', 'md:grid-cols-4', ...widthClasses);
+        grid.classList.remove('grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'sm:grid-cols-3', 'md:grid-cols-4', 'lg:grid-cols-5', ...widthClasses);
         if (stepHeading) {
             stepHeading.classList.remove(...widthClasses);
             stepHeading.classList.add('w-full', 'text-center');
@@ -1255,7 +1290,9 @@
             if (stepHeading) stepHeading.classList.add(...classes.filter((className) => widthClasses.includes(className)));
         };
 
-        if (count === 1) applySharedWidth('grid-cols-1', 'max-w-[280px]', 'mx-auto');
+        if (state.currentStep === 'condition' && count === 5) {
+            grid.classList.add('grid-cols-2', 'lg:grid-cols-5');
+        } else if (count === 1) applySharedWidth('grid-cols-1', 'max-w-[280px]', 'mx-auto');
         else if (count === 2) applySharedWidth('grid-cols-2', 'max-w-[500px]', 'mx-auto');
         else if (count === 3) applySharedWidth('grid-cols-2', 'sm:grid-cols-3', 'max-w-[700px]', 'mx-auto');
         else grid.classList.add('grid-cols-2', 'md:grid-cols-4');
