@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Admin Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script type="text/javascript" src="//widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js" async></script>
   <style>
     html, body { max-width: 100%; overflow-x: hidden; }
     .animate-in { animation: fadeIn .18s ease-out; }
@@ -68,39 +69,6 @@
       from { transform: scaleX(0); }
       to { transform: scaleX(1); }
     }
-
-    /* Operations dashboard polish: light-only, stable, compact */
-    :root { color-scheme: light; }
-    body { background: #f8fafc; }
-    #adminBootOverlay { color-scheme: light; }
-    .admin-shell-surface { background: rgba(255,255,255,.92); border: 1px solid rgb(226 232 240); box-shadow: 0 1px 2px rgba(15,23,42,.04); }
-    .admin-section-card { border: 1px solid rgb(226 232 240); background: #fff; border-radius: 1rem; box-shadow: 0 1px 2px rgba(15,23,42,.04); overflow: hidden; }
-    .admin-section-header { background: linear-gradient(180deg, #f8fafc, #fff); border-bottom: 1px solid rgb(241 245 249); padding: 1rem; }
-    .admin-status-dot { width:.5rem; height:.5rem; border-radius:9999px; flex:0 0 auto; }
-    .admin-refresh-chip { display:inline-flex; align-items:center; gap:.4rem; border:1px solid rgb(226 232 240); background:#fff; color:#475569; border-radius:9999px; padding:.35rem .65rem; font-size:.75rem; font-weight:650; white-space:nowrap; }
-    .admin-refresh-chip[data-refreshing="true"] { border-color: rgb(191 219 254); background: rgb(239 246 255); color: rgb(29 78 216); }
-    .admin-drawer-panel { width: min(1120px, 100vw); background:#fff; height:100dvh; max-height:100dvh; box-shadow: -18px 0 45px rgba(15,23,42,.18); }
-    .admin-drawer-header { border-bottom:1px solid rgb(226 232 240); background: rgba(255,255,255,.96); backdrop-filter: blur(12px); }
-    .admin-drawer-footer { border-top:1px solid rgb(226 232 240); background: rgba(255,255,255,.97); backdrop-filter: blur(12px); }
-    .admin-drawer-tab-chip { border:1px solid transparent; border-radius:9999px; padding:.55rem .85rem; }
-    .admin-drawer-tab-chip[aria-selected="true"] { background:#0f172a; color:#fff; border-color:#0f172a; }
-    .admin-drawer-tab-chip[aria-selected="false"] { background:#fff; color:#475569; border-color:rgb(226 232 240); }
-    .admin-drawer-tab-chip[aria-selected="false"]:hover { background:#f8fafc; color:#0f172a; }
-    .admin-mini-skeleton { position: relative; overflow:hidden; background:#e2e8f0; border-radius:.5rem; min-height:1rem; }
-    .admin-mini-skeleton::after { content:""; position:absolute; inset:0; transform:translateX(-100%); background:linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent); animation: adminSkeleton 1.1s infinite; }
-    @keyframes adminSkeleton { to { transform:translateX(100%); } }
-    @media (max-width: 767px) {
-      .admin-drawer-panel { width:100vw; max-width:100vw; }
-      .admin-drawer-footer { max-height: 34vh; }
-    }
-
-
-    .admin-refresh-chip { display:inline-flex; align-items:center; gap:.4rem; border:1px solid rgb(226 232 240); background:rgb(248 250 252); color:rgb(71 85 105); padding:.25rem .55rem; border-radius:999px; font-weight:700; }
-    .admin-table tbody tr { scroll-margin-top: 88px; }
-    .admin-table tbody tr:hover td { transition: background-color .12s ease; }
-    @media (max-width: 767px) {
-      .admin-table { min-width: 1060px; }
-    }
   </style>
   <script>
     // Optional override:
@@ -111,19 +79,19 @@
 </head>
 <body class="bg-slate-50 text-slate-900 overflow-x-hidden">
   <div id="root"></div>
-  <div id="adminBootOverlay" class="fixed inset-0 z-[100000] flex items-center justify-center bg-slate-50/95 backdrop-blur-sm">
-    <div class="w-[92vw] max-w-xl rounded-3xl border border-slate-200 bg-white px-6 py-7 shadow-xl">
+  <div id="adminBootOverlay" class="fixed inset-0 z-[100000] flex items-center justify-center bg-slate-950/90 backdrop-blur-sm">
+    <div class="w-[92vw] max-w-2xl rounded-3xl border border-slate-800 bg-slate-900/95 px-6 py-7 shadow-2xl">
       <div class="flex items-center justify-between gap-4">
         <div>
           <div class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Admin Loading</div>
-          <div id="adminBootLabel" class="mt-2 text-2xl font-bold text-slate-950">Loading admin workspace…</div>
+          <div id="adminBootLabel" class="mt-2 text-2xl font-bold text-white">Loading admin workspace…</div>
         </div>
-        <div id="adminBootPercent" class="text-3xl font-extrabold text-slate-700">0%</div>
+        <div id="adminBootPercent" class="text-3xl font-extrabold text-indigo-300">0%</div>
       </div>
-      <div class="mt-5 h-2.5 overflow-hidden rounded-full bg-slate-100">
-        <div id="adminBootBar" class="h-full rounded-full bg-slate-900 transition-all duration-300" style="width:0%"></div>
+      <div class="mt-5 h-3 overflow-hidden rounded-full bg-slate-800">
+        <div id="adminBootBar" class="h-full rounded-full bg-gradient-to-r from-indigo-500 via-blue-500 to-cyan-400 transition-all duration-300" style="width:0%"></div>
       </div>
-      <div class="mt-4 text-sm text-slate-500">Preparing auth, notifications, and the orders dataset.</div>
+      <div class="mt-4 text-sm text-slate-400">Preparing auth, notifications, and the full orders dataset.</div>
     </div>
   </div>
   <!-- Lucide icons (vanilla) -->
@@ -182,14 +150,12 @@
     const $bootPercent = document.getElementById("adminBootPercent");
     function setAdminBootOverlay(show, progress = 0, label = "Loading admin workspace…") {
       if (!$bootOverlay || !$bootBar || !$bootLabel || !$bootPercent) return;
-      const hasVisibleCachedData = !!(window.__adminCachedOrdersVisible || (typeof state !== "undefined" && state.ordersCacheHydrated && Array.isArray(state.allOrders) && state.allOrders.length));
-      const shouldShow = !!show && !hasVisibleCachedData;
       const safeProgress = Math.max(0, Math.min(100, Math.round(progress)));
-      $bootOverlay.classList.toggle("hidden", !shouldShow);
+      $bootOverlay.classList.toggle("hidden", !show);
       $bootBar.style.width = `${safeProgress}%`;
       $bootLabel.textContent = label;
       $bootPercent.textContent = `${safeProgress}%`;
-      if ($root) $root.style.visibility = shouldShow ? "hidden" : "visible";
+      $root.style.visibility = show ? "hidden" : "visible";
     }
     function esc(s) {
       return String(s ?? "").replace(/[&<>"']/g, m => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" }[m]));
@@ -1408,11 +1374,8 @@
       if (!cached?.orders || !Array.isArray(cached.orders) || !cached.orders.length) return false;
       state.allOrders = cached.orders.map((entry) => normalizeAdminOrderRecord(entry));
       state.ordersCacheHydrated = true;
-      window.__adminCachedOrdersVisible = true;
       state.ordersCacheLoadedAt = Number(cached.savedAt || 0);
       state.ordersLoading = false;
-      state.initialOrdersLoading = false;
-      state.refreshingOrders = false;
       state.appBooting = false;
       filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
       render();
@@ -1617,13 +1580,6 @@
       bulkVoidProgressDetails: "",
       lastRefreshAt: null,
       lastTrackingRefreshMeta: null,
-      initialOrdersLoading: false,
-      refreshingOrders: false,
-      actionInProgress: {},
-      selectedOrderLoading: false,
-      selectedOrderHydrating: false,
-      lastSelectedOrderHydratedAt: 0,
-      lastFocusHydrateAt: 0,
       ordersLoading: false,
       trackingReportModalOpen: false,
       trackingReportData: null,
@@ -1755,48 +1711,6 @@
         void writeAdminOrdersCacheNow(state.allOrders || []);
       }, 350);
     }
-    function getOrderRevisionMillis(order = {}) {
-      const candidates = [order.updatedAt, order.statusUpdatedAt, order.lastStatusUpdateAt, order.completedAt, order.receivedAt, order.createdAt];
-      for (const candidate of candidates) {
-        const ms = toDateAny(candidate)?.getTime();
-        if (Number.isFinite(ms) && ms > 0) return ms;
-      }
-      return Number(order.createdAtMillis || 0) || 0;
-    }
-    function mergeOrdersById(existing = [], incoming = []) {
-      const byId = new Map();
-      (Array.isArray(existing) ? existing : []).forEach((order) => {
-        if (order?.id) byId.set(order.id, normalizeAdminOrderRecord(order));
-      });
-      (Array.isArray(incoming) ? incoming : []).forEach((order) => {
-        if (!order?.id) return;
-        const normalized = normalizeAdminOrderRecord(order);
-        const previous = byId.get(normalized.id);
-        if (!previous || getOrderRevisionMillis(normalized) >= getOrderRevisionMillis(previous)) {
-          byId.set(normalized.id, { ...(previous || {}), ...normalized });
-        }
-      });
-      return Array.from(byId.values()).sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
-    }
-    function setOrdersRefreshState({ initial = false, refreshing = false, loading = false } = {}) {
-      state.initialOrdersLoading = !!initial;
-      state.refreshingOrders = !!refreshing;
-      state.ordersLoading = !!loading;
-      updateOrdersRefreshBadge();
-    }
-    function getLastRefreshLabel() {
-      const d = toDateAny(state.lastRefreshAt || state.ordersCacheLoadedAt);
-      return d ? `Last refreshed ${formatTimeOnly(d)}` : "Not refreshed yet";
-    }
-    function updateOrdersRefreshBadge() {
-      const chip = document.getElementById("adminRefreshStateChip");
-      if (!chip) return;
-      chip.dataset.refreshing = state.refreshingOrders ? "true" : "false";
-      chip.innerHTML = state.refreshingOrders
-        ? '<span class="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500"></span><span>Refreshing…</span>'
-        : `<span class="inline-block h-2 w-2 rounded-full bg-emerald-500"></span><span>${esc(getLastRefreshLabel())}</span>`;
-    }
-    let lastDrawerTriggerElement = null;
     let scheduledRenderFrame = 0;
     function prefillShippingLabelForm(order = null) {
       const info = order?.shippingInfo || {};
@@ -1910,73 +1824,17 @@
 
     async function hydrateSelectedOrderDetails(orderId) {
       if (!orderId) return;
-      state.selectedOrderHydrating = true;
-      state.selectedOrderLoading = true;
       try {
         const detailSnap = await withPerf(`firestore:order-detail:${orderId}`, () => getDoc(doc(db, "orders", orderId)));
         if (!detailSnap.exists() || state.selectedOrderId !== orderId) return;
         const data = detailSnap.data() || {};
         const detailedOrder = normalizeAdminOrderRecord({ id: detailSnap.id, ...data });
-        state.selectedOrderSnapshot = { ...(state.selectedOrderSnapshot || {}), ...detailedOrder };
+        state.selectedOrderSnapshot = detailedOrder;
         upsertOrderInState(detailedOrder);
-        state.lastSelectedOrderHydratedAt = Date.now();
         render();
       } catch (error) {
         console.error('Failed to load order details', error);
-      } finally {
-        state.selectedOrderHydrating = false;
-        state.selectedOrderLoading = false;
-        updateOrdersRefreshBadge();
       }
-    }
-
-    function closeOrderDrawer({ returnFocus = true } = {}) {
-      state.selectedOrderId = null;
-      state.selectedOrderSnapshot = null;
-      state.modalScrollTop.drawer = 0;
-      state.selectedDeviceKey = null;
-      state.selectedDeviceGroupKeys = [];
-      state.qcDeviceKey = null;
-      state.statusDropdownOpen = false;
-      state.qcOpen = false;
-      state.modalScrollTop.qc = 0;
-      state.qcStep = 1;
-      state.qcData = null;
-      state.reofferOpen = false;
-      state.reofferData = null;
-      state.reofferValidation = { message: "", fields: {} };
-      state.unlockInfoModalOpen = false;
-      state.unlockInfoModalData = null;
-      state.modalScrollTop.reoffer = 0;
-      render();
-      if (returnFocus && lastDrawerTriggerElement && typeof lastDrawerTriggerElement.focus === "function") {
-        requestAnimationFrame(() => {
-          try { lastDrawerTriggerElement.focus({ preventScroll: true }); } catch (_) { try { lastDrawerTriggerElement.focus(); } catch (__) {} }
-        });
-      }
-    }
-
-    function openOrderDrawer(orderId, { deviceKey = null, groupedKeys = [], tab = "overview", trigger = null } = {}) {
-      if (!orderId) return;
-      lastDrawerTriggerElement = trigger || document.activeElement || null;
-      state.selectedOrderId = orderId;
-      state.selectedOrderSnapshot = state.allOrders.find(o => o.id === orderId) || state.selectedOrderSnapshot || null;
-      state.selectedDeviceKey = deviceKey || null;
-      state.selectedDeviceGroupKeys = (!deviceKey && groupedKeys.length > 1) ? groupedKeys : [];
-      state.qcDeviceKey = deviceKey || null;
-      state.drawerTab = tab || "overview";
-      state.statusDropdownOpen = false;
-      state.qcOpen = false;
-      state.qcStep = 1;
-      state.qcData = null;
-      state.reofferOpen = false;
-      state.reofferData = null;
-      state.reofferValidation = { message: "", fields: {} };
-      state.unlockInfoModalOpen = false;
-      state.unlockInfoModalData = null;
-      state.selectedOrderHydrating = true;
-      render();
-      void hydrateSelectedOrderDetails(orderId);
     }
 
     function getOrderPayoutTotal(order) {
@@ -2954,7 +2812,7 @@
       if (unsubscribeOrders) unsubscribeOrders();
       const loadVersion = ++ordersLoadVersion;
       const hasSeedData = Array.isArray(state.allOrders) && state.allOrders.length > 0;
-      setOrdersRefreshState({ initial: !hasSeedData, refreshing: hasSeedData, loading: true });
+      state.ordersLoading = true;
       if (!hasSeedData) {
         state.appBooting = true;
         state.appBootProgress = 28;
@@ -2966,28 +2824,20 @@
         state.appBootProgress = 100;
         state.appBootLabel = "Refreshing cached orders…";
         updateAdminBootUi();
-        updateOrdersRefreshBadge();
       }
 
       try {
         const attachLiveOrdersSnapshot = () => {
           const liveOrdersRef = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(ADMIN_ORDERS_INITIAL_LIMIT));
           unsubscribeOrders = onSnapshot(liveOrdersRef, (snapshot) => {
-            const liveOrders = snapshot.docs.map((d) => {
+            const byId = new Map((state.allOrders || []).map((order) => [order.id, order]));
+            snapshot.docs.forEach((d) => {
               const data = d.data();
               const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
-              return { id: d.id, ...data, createdAtMillis };
+              byId.set(d.id, { id: d.id, ...data, createdAtMillis });
             });
-            state.allOrders = mergeOrdersById(state.allOrders || [], liveOrders);
-            if (state.selectedOrderId) {
-              const liveSelected = state.allOrders.find((order) => order.id === state.selectedOrderId);
-              if (liveSelected) state.selectedOrderSnapshot = { ...(state.selectedOrderSnapshot || {}), ...liveSelected };
-            }
-            state.lastRefreshAt = new Date();
-            state.refreshingOrders = false;
-            state.ordersLoading = false;
+            state.allOrders = Array.from(byId.values()).sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
             schedulePersistOrdersCache();
-            updateOrdersRefreshBadge();
             renderOrdersWithInteractionGuard();
           }, (err) => {
             console.error("Firestore Error:", err);
@@ -3035,12 +2885,10 @@
         if (!hasSeedData) {
           const loaded = await loadAllOrdersInChunks({ showBootProgress: true });
           if (loadVersion !== ordersLoadVersion) return;
-          state.allOrders = mergeOrdersById(state.allOrders || [], loaded || []);
+          state.ordersLoading = false;
+          state.allOrders = loaded || [];
           state.ordersCacheHydrated = true;
-          window.__adminCachedOrdersVisible = true;
           state.ordersCacheLoadedAt = Date.now();
-          state.lastRefreshAt = new Date();
-          setOrdersRefreshState({ initial: false, refreshing: false, loading: false });
           schedulePersistOrdersCache();
           perfMark('admin:first-data-rendered');
           perfMark('admin:all-data-loaded');
@@ -3060,20 +2908,18 @@
           const loaded = await loadAllOrdersInChunks({ showBootProgress: false });
           if (loadVersion !== ordersLoadVersion) return;
           if (Array.isArray(loaded) && loaded.length) {
-            state.allOrders = mergeOrdersById(state.allOrders || [], loaded);
+            state.allOrders = loaded;
             state.ordersCacheHydrated = true;
-            window.__adminCachedOrdersVisible = true;
             state.ordersCacheLoadedAt = Date.now();
-            state.lastRefreshAt = new Date();
           }
-          setOrdersRefreshState({ initial: false, refreshing: false, loading: false });
+          state.ordersLoading = false;
           schedulePersistOrdersCache();
           filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
         }
 
         attachLiveOrdersSnapshot();
       } catch (err) {
-        setOrdersRefreshState({ initial: false, refreshing: false, loading: false });
+        state.ordersLoading = false;
         state.appBooting = false;
         console.error("Failed loading orders:", err);
         toast("Failed to load orders", "error");
@@ -3081,7 +2927,7 @@
       }
     }
 
-    function handleAdminWindowVisible() {
+    window.addEventListener('focus', () => {
       if (!state.user && auth.currentUser) {
         state.user = auth.currentUser;
         state.authLoading = false;
@@ -3092,20 +2938,36 @@
       if (auth.currentUser) {
         void setupAdminNotifications(auth.currentUser);
       }
-      // Do not refilter/rerender the whole dashboard just because the window regained focus.
-      // Only hydrate an already-open drawer if the last drawer detail fetch is stale.
-      const now = Date.now();
-      if (state.selectedOrderId && !hasTransientOverlayOpen() && now - Number(state.lastFocusHydrateAt || 0) > 60000) {
-        state.lastFocusHydrateAt = now;
-        void hydrateSelectedOrderDetails(state.selectedOrderId);
+      if (!hasTransientOverlayOpen()) {
+        preserveWindowScrollForNextRender();
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
       }
-    }
-
-    window.addEventListener('focus', handleAdminWindowVisible);
+      if (state.selectedOrderId && !hasTransientOverlayOpen()) {
+        preserveWindowScrollForNextRender();
+        hydrateSelectedOrderDetails(state.selectedOrderId);
+      }
+    });
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible') return;
-      handleAdminWindowVisible();
+      if (!state.user && auth.currentUser) {
+        state.user = auth.currentUser;
+        state.authLoading = false;
+        state.authError = "";
+        writeAdminAuthCache(auth.currentUser);
+        render();
+      }
+      if (auth.currentUser) {
+        void setupAdminNotifications(auth.currentUser);
+      }
+      if (!hasTransientOverlayOpen()) {
+        preserveWindowScrollForNextRender();
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+      }
+      if (state.selectedOrderId && !hasTransientOverlayOpen()) {
+        preserveWindowScrollForNextRender();
+        hydrateSelectedOrderDetails(state.selectedOrderId);
+      }
     });
 
     window.addEventListener('storage', (event) => {
@@ -4946,65 +4808,65 @@
 
     function renderSidebar() { return ""; }
     function renderTopbar() {
+      const initial = state.user?.email ? state.user.email.charAt(0).toUpperCase() : "A";
       const trackingMeta = getLatestTrackingRefreshMeta();
       const gmail = state.gmailStatus || {};
       const gmailConnected = gmail.connected || gmail.status === "connected";
-      const activeTabLabel = state.activeTab === "email-inbox" ? "Inbox" : "Orders";
       return `
-        <header class="bg-white/95 backdrop-blur border-b border-slate-200 sticky top-0 z-20 px-3 sm:px-6 py-3">
-          <div class="mx-auto max-w-[1600px] flex items-center justify-between gap-3">
-            <div class="flex items-center gap-3 min-w-0">
-              <button id="mobileTopbarMenuBtn" class="sm:hidden inline-flex items-center justify-center p-2 rounded-xl border border-slate-300 text-slate-700 bg-white" aria-label="Open admin menu">
-                <i data-lucide="menu" style="width:18px;height:18px"></i>
-              </button>
-              <div class="min-w-0">
-                <div class="flex items-center gap-2 min-w-0">
-                  <h1 class="text-base sm:text-lg font-bold text-slate-950 truncate">Operations</h1>
-                  <span class="hidden sm:inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">${esc(activeTabLabel)}</span>
-                </div>
-                <div class="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500">
-                  <span id="adminRefreshStateChip" class="admin-refresh-chip" data-refreshing="${state.refreshingOrders ? "true" : "false"}">
-                    ${state.refreshingOrders
-                      ? `<span class="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500"></span><span>Refreshing…</span>`
-                      : `<span class="inline-block h-2 w-2 rounded-full bg-emerald-500"></span><span>${esc(getLastRefreshLabel())}</span>`}
-                  </span>
-                  ${trackingMeta ? `<span class="hidden md:inline text-slate-400">•</span><span class="hidden md:inline">${esc(getTrackingRefreshLabel(trackingMeta))}</span>` : ""}
-                </div>
+        <header class="bg-white border-b border-slate-200 sticky top-0 z-20 px-3 sm:px-8 py-2.5">
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex flex-col justify-center min-w-0">
+              <h1 class="text-base sm:text-lg font-semibold text-slate-900 truncate">Admin Dashboard</h1>
+              <p class="text-xs text-slate-500 hidden sm:block">Manage orders, fulfillment, and QC workflows.</p>
+            </div>
+            <button id="mobileTopbarMenuBtn" class="sm:hidden inline-flex items-center justify-center p-2 rounded-lg border border-slate-300 text-slate-700" aria-label="Open admin menu">
+              <i data-lucide="menu" style="width:18px;height:18px"></i>
+            </button>
+            <div class="hidden md:flex items-center gap-3">
+              <div class="text-xs text-slate-500">
+                ${trackingMeta ? esc(getTrackingRefreshLabel(trackingMeta)) : ""}
               </div>
             </div>
-
-            <div class="hidden sm:flex items-center gap-2">
-              <div class="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-                <button id="admin-orders-tab-btn" class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${state.activeTab === "orders" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600 hover:text-slate-900"}">
-                  <i data-lucide="package" style="width:14px;height:14px"></i>Orders
-                </button>
-                <button id="admin-email-inbox-tab-btn" class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${state.activeTab === "email-inbox" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600 hover:text-slate-900"}">
-                  <i data-lucide="inbox" style="width:14px;height:14px"></i>Inbox
-                </button>
-              </div>
-              <button id="refresh-order-status-cache-btn" class="inline-flex items-center gap-2 rounded-xl border ${state.orderStatusCacheRefreshing ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"} px-3 py-2 text-xs font-semibold" title="Clear cached order statuses and reload every order from the server" ${state.orderStatusCacheRefreshing ? "disabled" : ""}>
-                <i data-lucide="${state.orderStatusCacheRefreshing ? "loader" : "rotate-ccw"}" class="${state.orderStatusCacheRefreshing ? "animate-spin" : ""}" style="width:14px;height:14px"></i>
-                ${state.orderStatusCacheRefreshing ? "Refreshing" : "Refresh"}
-              </button>
-              <button id="gmail-sync-btn" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50" title="Sync Gmail replies">
-                <i data-lucide="refresh-cw" style="width:14px;height:14px"></i>Gmail
-              </button>
-              <button id="gmail-connect-btn" class="inline-flex items-center gap-2 rounded-xl ${gmailConnected ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "border border-amber-200 bg-amber-50 text-amber-700"} px-3 py-2 text-xs font-semibold" title="Connect Gmail / Google Workspace">
-                <span class="h-2 w-2 rounded-full ${gmailConnected ? "bg-emerald-500" : "bg-amber-500"}"></span>
-                ${gmailConnected ? "Connected" : "Connect"}
-              </button>
-              <button id="logoutBtn" class="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-rose-50 hover:text-rose-600" title="Sign out" aria-label="Sign out">
-                <i data-lucide="log-out" style="width:16px;height:16px"></i>
-              </button>
+            <div class="hidden sm:flex items-center gap-4">
+            <button id="admin-orders-tab-btn" class="hidden sm:inline-flex items-center gap-2 rounded-full border ${state.activeTab === "orders" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"} px-3 py-2 text-xs font-semibold">
+              <i data-lucide="package" style="width:14px;height:14px"></i>
+              Orders
+            </button>
+            <button id="admin-email-inbox-tab-btn" class="hidden sm:inline-flex items-center gap-2 rounded-full border ${state.activeTab === "email-inbox" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"} px-3 py-2 text-xs font-semibold">
+              <i data-lucide="inbox" style="width:14px;height:14px"></i>
+              Inbox
+            </button>
+            <div class="hidden lg:flex items-center gap-2 rounded-full border ${gmailConnected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"} px-3 py-1.5 text-xs font-semibold">
+              <span class="h-2 w-2 rounded-full ${gmailConnected ? "bg-emerald-500" : "bg-amber-500"}"></span>
+              ${gmailConnected ? `Gmail: ${esc(gmail.mailboxEmail || "connected")}` : "Gmail not connected"}
+            </div>
+            <button id="refresh-order-status-cache-btn" class="hidden sm:inline-flex items-center gap-2 rounded-full border ${state.orderStatusCacheRefreshing ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed" : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"} px-3 py-2 text-xs font-semibold" title="Clear cached order statuses and reload every order from the server" ${state.orderStatusCacheRefreshing ? "disabled" : ""}>
+              <i data-lucide="${state.orderStatusCacheRefreshing ? "loader" : "rotate-ccw"}" class="${state.orderStatusCacheRefreshing ? "animate-spin" : ""}" style="width:14px;height:14px"></i>
+              ${state.orderStatusCacheRefreshing ? "Refreshing…" : "Refresh Status Cache"}
+            </button>
+            <button id="gmail-sync-btn" class="hidden sm:inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50" title="Sync Gmail replies">
+              <i data-lucide="refresh-cw" style="width:14px;height:14px"></i>
+              Sync Gmail
+            </button>
+            <button id="gmail-connect-btn" class="hidden sm:inline-flex items-center gap-2 rounded-full ${gmailConnected ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50" : "bg-indigo-600 text-white hover:bg-indigo-700"} px-3 py-2 text-xs font-semibold" title="Connect Gmail / Google Workspace">
+              <i data-lucide="mail" style="width:14px;height:14px"></i>
+              ${gmailConnected ? "Reconnect Gmail" : "Connect Gmail"}
+            </button>
+            <button id="logoutBtn" class="p-2 text-rose-600 hover:bg-rose-50 rounded-full transition-colors" title="Sign out">
+              <i data-lucide="log-out" style="width:18px;height:18px"></i>
+            </button>
+            <div class="h-8 w-8 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-xs font-bold text-indigo-700">
+              ${esc(initial)}
             </div>
           </div>
+          </div>
           ${state.mobileTopbarMenuOpen ? `
-            <div class="sm:hidden mt-3 border-t border-slate-200 pt-3 flex flex-wrap gap-2">
-              <button id="admin-orders-tab-btn-mobile" class="inline-flex items-center gap-2 rounded-full border ${state.activeTab === "orders" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700"} px-3 py-2 text-xs font-semibold"><i data-lucide="package" style="width:14px;height:14px"></i>Orders</button>
-              <button id="admin-email-inbox-tab-btn-mobile" class="inline-flex items-center gap-2 rounded-full border ${state.activeTab === "email-inbox" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700"} px-3 py-2 text-xs font-semibold"><i data-lucide="inbox" style="width:14px;height:14px"></i>Inbox</button>
-              <button id="refresh-order-status-cache-btn-mobile" class="inline-flex items-center gap-2 rounded-full border ${state.orderStatusCacheRefreshing ? "border-slate-200 bg-slate-100 text-slate-400" : "border-slate-300 bg-white text-slate-700"} px-3 py-2 text-xs font-semibold" ${state.orderStatusCacheRefreshing ? "disabled" : ""}><i data-lucide="${state.orderStatusCacheRefreshing ? "loader" : "rotate-ccw"}" class="${state.orderStatusCacheRefreshing ? "animate-spin" : ""}" style="width:14px;height:14px"></i>${state.orderStatusCacheRefreshing ? "Refreshing" : "Refresh"}</button>
+            <div class="sm:hidden mt-2 border-t border-slate-200 pt-2 flex flex-wrap gap-2">
+              <button id="admin-orders-tab-btn-mobile" class="inline-flex items-center gap-2 rounded-full border ${state.activeTab === "orders" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700"} px-3 py-2 text-xs font-semibold"><i data-lucide="package" style="width:14px;height:14px"></i>Orders</button>
+              <button id="admin-email-inbox-tab-btn-mobile" class="inline-flex items-center gap-2 rounded-full border ${state.activeTab === "email-inbox" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700"} px-3 py-2 text-xs font-semibold"><i data-lucide="inbox" style="width:14px;height:14px"></i>Inbox</button>
+              <button id="refresh-order-status-cache-btn-mobile" class="inline-flex items-center gap-2 rounded-full border ${state.orderStatusCacheRefreshing ? "border-slate-200 bg-slate-100 text-slate-400" : "border-blue-200 bg-blue-50 text-blue-700"} px-3 py-2 text-xs font-semibold" ${state.orderStatusCacheRefreshing ? "disabled" : ""}><i data-lucide="${state.orderStatusCacheRefreshing ? "loader" : "rotate-ccw"}" class="${state.orderStatusCacheRefreshing ? "animate-spin" : ""}" style="width:14px;height:14px"></i>${state.orderStatusCacheRefreshing ? "Refreshing…" : "Refresh Statuses"}</button>
               <button id="gmail-sync-btn-mobile" class="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i>Sync Gmail</button>
-              <button id="gmail-connect-btn-mobile" class="inline-flex items-center gap-2 rounded-full ${gmailConnected ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "border border-amber-200 bg-amber-50 text-amber-700"} px-3 py-2 text-xs font-semibold"><span class="h-2 w-2 rounded-full ${gmailConnected ? "bg-emerald-500" : "bg-amber-500"}"></span>${gmailConnected ? "Gmail connected" : "Connect Gmail"}</button>
+              <button id="gmail-connect-btn-mobile" class="inline-flex items-center gap-2 rounded-full ${gmailConnected ? "border border-slate-300 bg-white text-slate-700" : "bg-indigo-600 text-white"} px-3 py-2 text-xs font-semibold"><i data-lucide="mail" style="width:14px;height:14px"></i>${gmailConnected ? "Reconnect Gmail" : "Connect Gmail"}</button>
               <button id="logoutBtnMobile" class="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"><i data-lucide="log-out" style="width:14px;height:14px"></i>Sign out</button>
             </div>
           ` : ""}
@@ -5064,98 +4926,79 @@
       };
     }
     function updateGlassMetricsHTML() {
-      const { statusCounts, turnaroundStats, liveOrders } = computeStatusCounts();
+      const { statusCounts, turnaroundStats } = computeStatusCounts();
       const actionCards = [
         {
+          key: "turnaround_rate",
+          label: "Turnaround Rate",
+          helper: `${turnaroundStats.sentToUsCount} of ${turnaroundStats.baseCount} actually sent to us`,
+          count: `${turnaroundStats.rate}%`,
+          tone: "border-slate-200 bg-white text-slate-900",
+          countTone: "bg-slate-100 text-slate-700",
+          nonFilter: true,
+        },
+        {
           key: "delivered_to_us",
-          label: "Check in",
-          helper: "Delivered, not received",
+          label: "Delivered",
+          helper: "Just arrived, needs check-in",
           count: statusCounts.get("delivered_to_us") || 0,
-          icon: "package-check",
-          tone: "border-blue-200 bg-blue-50/80 text-blue-900",
-          countTone: "bg-white text-blue-700 border-blue-200",
+          tone: "border-blue-200 bg-blue-50 text-blue-900",
+          countTone: "bg-blue-100 text-blue-700",
         },
         {
           key: "received",
-          label: "QC needed",
-          helper: "Received, waiting on inspection",
+          label: "Received",
+          helper: "Waiting on QC",
           count: statusCounts.get("received") || 0,
-          icon: "shield-check",
-          tone: "border-indigo-200 bg-indigo-50/80 text-indigo-900",
-          countTone: "bg-white text-indigo-700 border-indigo-200",
+          tone: "border-indigo-200 bg-indigo-50 text-indigo-900",
+          countTone: "bg-indigo-100 text-indigo-700",
         },
         {
           key: "issue_resolved",
-          label: "Re-QC",
-          helper: "Customer replied or issue resolved",
+          label: "Pending Re-QC",
+          helper: "Customer responded, recheck needed",
           count: statusCounts.get("issue_resolved") || 0,
-          icon: "rotate-ccw",
-          tone: "border-rose-200 bg-rose-50/80 text-rose-900",
-          countTone: "bg-white text-rose-700 border-rose-200",
+          tone: "border-rose-200 bg-rose-50 text-rose-900",
+          countTone: "bg-rose-100 text-rose-700",
         },
         {
           key: "ready_to_pay",
-          label: "Pay out",
-          helper: "Approved and ready for payment",
+          label: "Ready To Pay",
+          helper: "Clear for payout",
           count: statusCounts.get("ready_to_pay") || 0,
-          icon: "badge-dollar-sign",
-          tone: "border-emerald-200 bg-emerald-50/80 text-emerald-900",
-          countTone: "bg-white text-emerald-700 border-emerald-200",
+          tone: "border-emerald-200 bg-emerald-50 text-emerald-900",
+          countTone: "bg-emerald-100 text-emerald-700",
         },
         {
           key: "re-offered-declined",
-          label: "Returns",
-          helper: "Declined re-offers need handling",
+          label: "Re-offer Declined",
+          helper: "Needs return handling",
           count: statusCounts.get("re-offered-declined") || 0,
-          icon: "undo-2",
-          tone: "border-purple-200 bg-purple-50/80 text-purple-900",
-          countTone: "bg-white text-purple-700 border-purple-200",
+          tone: "border-purple-200 bg-purple-50 text-purple-900",
+          countTone: "bg-purple-100 text-purple-700",
         },
       ];
       return `
-        <section class="rounded-2xl border border-slate-200 bg-white shadow-sm p-4">
-          <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div class="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Work queue</div>
-              <div class="mt-1 text-sm text-slate-600">Only the statuses that usually need action right now.</div>
-            </div>
-            <div class="flex flex-wrap gap-2 text-xs">
-              <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 font-semibold text-slate-700">
-                <span class="h-2 w-2 rounded-full bg-slate-400"></span>${esc(liveOrders)} active rows
-              </span>
-              <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 font-semibold text-slate-700">
-                <span class="h-2 w-2 rounded-full bg-emerald-500"></span>${turnaroundStats.rate}% sent in
-              </span>
-              <span class="hidden sm:inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 font-medium text-slate-500">
-                ${turnaroundStats.sentToUsCount}/${turnaroundStats.baseCount} excluding kits
-              </span>
-            </div>
-          </div>
-          <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
-            ${actionCards.map((card) => `
-              <button
-                type="button"
-                data-status-tab="${esc(card.key)}"
-                class="group text-left rounded-xl border p-4 transition-all hover:-translate-y-0.5 hover:shadow-md ${card.tone}"
-              >
-                <div class="flex items-start justify-between gap-3">
-                  <div class="flex min-w-0 items-start gap-3">
-                    <span class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border bg-white/80">
-                      <i data-lucide="${esc(card.icon)}" style="width:17px;height:17px"></i>
-                    </span>
-                    <div class="min-w-0">
-                      <div class="text-base font-bold leading-tight">${esc(card.label)}</div>
-                      <div class="mt-1 text-xs opacity-75">${esc(card.helper)}</div>
-                    </div>
-                  </div>
-                  <span class="inline-flex min-w-[42px] items-center justify-center rounded-full border px-3 py-1 text-base font-extrabold ${card.countTone}">
-                    ${card.count}
-                  </span>
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3 mb-6">
+          ${actionCards.map((card) => `
+            <button
+              type="button"
+              ${card.nonFilter ? '' : `data-status-tab="${esc(card.key)}"`}
+              class="text-left rounded-xl border p-4 shadow-sm transition-all ${card.nonFilter ? '' : 'hover:-translate-y-0.5 hover:shadow-md'} ${card.tone}"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">Need To Do</div>
+                  <div class="mt-2 text-xl font-bold leading-tight">${esc(card.label)}</div>
+                  <div class="mt-1 text-sm opacity-80">${esc(card.helper)}</div>
                 </div>
-              </button>
-            `).join("")}
-          </div>
-        </section>
+                <span class="inline-flex min-w-[42px] items-center justify-center rounded-full px-3 py-1 text-lg font-extrabold ${card.countTone}">
+                  ${card.count}
+                </span>
+              </div>
+            </button>
+          `).join("")}
+        </div>
       `;
     }
     function getStatusPillClasses(key, isActive) {
@@ -5245,24 +5088,22 @@
       };
     }
     function renderStatusBreakdown() {
-      const { statusCounts, statusCountAll, cancelledCount } = computeStatusCounts();
-      const primaryItems = [
+      const { statusCounts, statusCountAll, cancelledCount, visible } = computeStatusCounts();
+      const items = [
         { key: "all", label: "All", count: statusCountAll },
-        { key: "order_pending", label: "Pending", count: statusCounts.get("order_pending") || 0 },
-        { key: "label_generated", label: "Labels", count: statusCounts.get("label_generated") || 0 },
+        { key: "order_pending", label: "Order Pending", count: statusCounts.get("order_pending") || 0 },
+        { key: "label_generated", label: "Label Generated", count: statusCounts.get("label_generated") || 0 },
         { key: "kits", label: "Kits", count: statusCounts.get("kits") || 0 },
-        { key: "phone_on_the_way", label: "In transit", count: statusCounts.get("phone_on_the_way") || 0 },
-        { key: "received", label: "QC", count: statusCounts.get("received") || 0 },
-        { key: "ready_to_pay", label: "Pay", count: statusCounts.get("ready_to_pay") || 0 },
-        { key: "completed", label: "Done", count: statusCounts.get("completed") || 0 },
-      ];
-      const moreItems = [
+        { key: "phone_on_the_way", label: "Phone On The Way To Us", count: statusCounts.get("phone_on_the_way") || 0 },
         { key: "delivered_to_us", label: "Delivered", count: statusCounts.get("delivered_to_us") || 0 },
+        { key: "received", label: "Received", count: statusCounts.get("received") || 0 },
         { key: "emailed", label: "Emailed", count: statusCounts.get("emailed") || 0 },
-        { key: "issue_resolved", label: "Re-QC", count: statusCounts.get("issue_resolved") || 0 },
-        { key: "re-offered-pending", label: "Re-offer", count: statusCounts.get("re-offered-pending") || 0 },
-        { key: "re-offered-declined", label: "Declined", count: statusCounts.get("re-offered-declined") || 0 },
-        { key: "return-label-generated", label: "Return labels", count: statusCounts.get("return-label-generated") || 0 },
+        { key: "issue_resolved", label: "Pending Re-QC", count: statusCounts.get("issue_resolved") || 0 },
+        { key: "re-offered-pending", label: "Re-offer Pending", count: statusCounts.get("re-offered-pending") || 0 },
+        { key: "re-offered-declined", label: "Re-offer Declined", count: statusCounts.get("re-offered-declined") || 0 },
+        { key: "ready_to_pay", label: "Ready To Pay", count: statusCounts.get("ready_to_pay") || 0 },
+        { key: "return-label-generated", label: "Return Label Generated", count: statusCounts.get("return-label-generated") || 0 },
+        { key: "completed", label: "Completed", count: statusCounts.get("completed") || 0 },
         { key: "misc", label: "Misc", count: statusCounts.get("misc") || 0 },
         { key: "cancelled", label: "Cancelled", count: cancelledCount },
       ];
@@ -5270,30 +5111,19 @@
         const classes = getStatusPillClasses(it.key, state.currentActiveStatus === it.key);
         return `
           <button data-status-tab="${esc(it.key)}"
-            class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold whitespace-nowrap transition-colors ${classes.pill}"
+            class="px-4 py-2 rounded-xl text-[15px] font-semibold whitespace-nowrap transition-colors ${classes.pill}"
             role="button" tabindex="0">
-            <span>${esc(it.label)}</span>
-            <span class="inline-flex items-center justify-center min-w-[24px] rounded-full px-1.5 py-0.5 text-[11px] font-extrabold ${classes.count}">${it.count}</span>
+            ${esc(it.label)}
+            <span class="ml-2 inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-lg text-xs font-semibold ${classes.count}">${it.count}</span>
           </button>
         `;
       }).join("");
       return `
-        <section class="rounded-2xl border border-slate-200 bg-white shadow-sm p-3">
-          <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div class="admin-mobile-chip-scroll md:overflow-visible md:flex-wrap">
-              ${renderPills(primaryItems)}
-            </div>
-            <details class="group shrink-0">
-              <summary class="list-none cursor-pointer inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100">
-                More statuses
-                <i data-lucide="chevron-down" class="transition-transform group-open:rotate-180" style="width:14px;height:14px"></i>
-              </summary>
-              <div class="mt-3 flex flex-wrap gap-2 lg:absolute lg:right-6 lg:z-10 lg:max-w-[760px] lg:rounded-2xl lg:border lg:border-slate-200 lg:bg-white lg:p-3 lg:shadow-xl">
-                ${renderPills(moreItems)}
-              </div>
-            </details>
+        <div class="mb-4">
+          <div class="admin-pill-row md:flex-wrap admin-mobile-chip-scroll md:overflow-visible">
+            ${renderPills(items)}
           </div>
-        </section>
+        </div>
       `;
     }
     // ----------------------------
@@ -5569,75 +5399,6 @@
       }
       return groups;
     }
-
-    function getStatusRowToneClass(status) {
-      const s = normalizeStatusKey(status);
-      if (s === "order_pending") return "border-l-4 border-l-amber-400 bg-amber-50/30 hover:bg-amber-50";
-      if (s === "label_generated" || s === "phone_on_the_way" || s === "delivered_to_us") return "border-l-4 border-l-blue-500 bg-blue-50/25 hover:bg-blue-50/70";
-      if (s === "kits") return "border-l-4 border-l-cyan-500 bg-cyan-50/25 hover:bg-cyan-50/70";
-      if (s === "received" || s === "emailed") return "border-l-4 border-l-indigo-500 bg-indigo-50/25 hover:bg-indigo-50/70";
-      if (s === "issue_resolved") return "border-l-4 border-l-rose-500 bg-rose-50/30 hover:bg-rose-50/80";
-      if (s === "ready_to_pay") return "border-l-4 border-l-emerald-500 bg-emerald-50/30 hover:bg-emerald-50/80";
-      if (s === "re-offered-pending" || s === "re_offered_pending" || s === "re-offered-declined" || s === "re_offered_declined") return "border-l-4 border-l-purple-500 bg-purple-50/30 hover:bg-purple-50/80";
-      if (s === "return-label-generated") return "border-l-4 border-l-slate-400 bg-slate-50/70 hover:bg-slate-100";
-      if (s === "completed") return "border-l-4 border-l-emerald-600 bg-white hover:bg-emerald-50/40 opacity-90";
-      if (s === "cancelled") return "border-l-4 border-l-slate-300 bg-slate-50/80 hover:bg-slate-100 opacity-75";
-      return "border-l-4 border-l-slate-300 bg-white hover:bg-slate-50";
-    }
-
-    function getStatusDotClass(status) {
-      const s = normalizeStatusKey(status);
-      if (s === "order_pending") return "bg-amber-500";
-      if (s === "label_generated" || s === "phone_on_the_way" || s === "delivered_to_us") return "bg-blue-500";
-      if (s === "kits") return "bg-cyan-500";
-      if (s === "received" || s === "emailed") return "bg-indigo-500";
-      if (s === "issue_resolved") return "bg-rose-500";
-      if (s === "ready_to_pay" || s === "completed") return "bg-emerald-500";
-      if (s === "re-offered-pending" || s === "re_offered_pending" || s === "re-offered-declined" || s === "re_offered_declined") return "bg-purple-500";
-      return "bg-slate-400";
-    }
-
-    function getNextActionLabel(order = {}, status = "") {
-      const s = normalizeStatusKey(status || order?.status || "");
-      if (s === "order_pending") return "Generate label / kit";
-      if (s === "label_generated") return "Watch shipment";
-      if (s === "kits") return "Track kit";
-      if (s === "phone_on_the_way") return "Await delivery";
-      if (s === "delivered_to_us") return "Check in device";
-      if (s === "received") return "Run QC";
-      if (s === "emailed") return "Waiting on customer";
-      if (s === "issue_resolved") return "Re-check QC";
-      if (s === "re-offered-pending" || s === "re_offered_pending") return "Await re-offer answer";
-      if (s === "re-offered-declined" || s === "re_offered_declined") return "Create return label";
-      if (s === "ready_to_pay") return "Send payout";
-      if (s === "return-label-generated") return "Track return";
-      if (s === "completed") return "Done";
-      if (s === "cancelled") return "Cancelled";
-      return "Review order";
-    }
-
-    function formatPaymentMethodDisplay(order = {}) {
-      const raw = String(order?.paymentMethod || "").trim();
-      if (!raw) return "No payment method";
-      const n = normalizeStatusKey(raw);
-      if (n === "cashapp" || n === "cash_app" || n === "cash-app") return "Cash App";
-      if (n === "paypal" || n === "pay_pal") return "PayPal";
-      if (n === "zelle") return "Zelle";
-      if (n === "check") return "Check";
-      if (n === "echeck" || n === "e_check") return "E-Check";
-      return raw.replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
-    }
-
-    function getCustomerAddressLine(order = {}) {
-      const info = order?.shippingInfo || {};
-      return [info.city, info.state, info.zipCode || info.zip].filter(Boolean).join(", ") || "No address";
-    }
-
-    function compactEmail(email = "") {
-      const value = String(email || "").trim();
-      if (!value) return "";
-      return value.length > 34 ? `${value.slice(0, 31)}…` : value;
-    }
     function renderOrdersTable() {
       const devices = state.currentFilteredDevices || [];
       const groupedRows = groupDevicesForTable(devices);
@@ -5647,35 +5408,25 @@
       const start = (page - 1) * state.ORDERS_PER_PAGE;
       const end = start + state.ORDERS_PER_PAGE;
       const pageGroups = groupedRows.slice(start, end);
+      // build grouped rows & track lastRenderedDeviceKeys
       state.lastRenderedDeviceKeys = [];
       const rowHtml = [];
       let lastReadyToPayPaymentGroupKey = null;
       const showReadyToPayPaymentGroups = normalizeStatusKey(state.currentActiveStatus) === 'ready_to_pay';
-
       for (const group of pageGroups) {
         const order = group.order;
         const deviceStatus = group.deviceStatus;
         const groupEntries = group.entries;
         const deviceKey = groupEntries.length === 1 ? groupEntries[0].deviceKey : "";
         const deviceGroupKeysAttr = esc(group.deviceKeys.join(","));
-        group.deviceKeys.forEach((key) => state.lastRenderedDeviceKeys.push(key));
 
+        group.deviceKeys.forEach((key) => state.lastRenderedDeviceKeys.push(key));
         const createdAt = order?.createdAt;
         const lastUp = getLastUpdateTimestamp(order);
         const trackingNumber = getAnyTrackingNumber(order) || "";
         const trackingLink = getTrackingLink(trackingNumber);
         const statusExtra = labelStatusExtraHTML(order);
         const payoutTotal = groupEntries.reduce((sum, entry) => sum + Number(getEffectivePerDeviceOffer(order, entry.item, entry.deviceKey) || 0), 0);
-        const paymentMethod = formatPaymentMethodDisplay(order);
-        const payoutInfo = getPayoutInfoDisplay(order);
-        const customerName = order?.shippingInfo?.fullName || "Guest";
-        const customerEmail = order?.shippingInfo?.email || "";
-        const customerPhone = order?.shippingInfo?.phone || "";
-        const addressLine = getCustomerAddressLine(order);
-        const nextAction = getNextActionLabel(order, deviceStatus);
-        const rowTone = getStatusRowToneClass(deviceStatus);
-        const dotClass = getStatusDotClass(deviceStatus);
-
         const deviceSummaries = groupEntries.map((entry) => {
           const item = entry.item || {};
           const deviceName = item?.device || item?.title || order?.device || "Device";
@@ -5685,14 +5436,13 @@
           const deviceDetails = [storage, carrier, model].filter(Boolean).join(" • ");
           return {
             label: `${deviceName}${deviceDetails ? ` • ${deviceDetails}` : ""}`,
-            condition: item?.condition || order?.condition || item?.condition_cosmetic || order?.condition_cosmetic || "",
+            condition: item?.condition || order?.condition || "",
           };
         });
         const primaryDevice = deviceSummaries[0] || { label: "Device", condition: "" };
         const showGrouped = groupEntries.length > 1;
-        const groupedLabel = showGrouped ? `${groupEntries.length} devices` : "";
-        const splitStatusBadge = !showGrouped && orderHasDeviceWithStatus(order, deviceStatus) && getOrderDeviceEntries(order).length > 1
-          ? `<span class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700 border border-indigo-200">Split status</span>`
+        const groupedLabel = showGrouped
+          ? `${groupEntries.length} devices together`
           : "";
         const responseBadgeHtml = showGrouped
           ? groupEntries.map((groupEntry) => awaitingResponseBadgeForDevice(order, groupEntry.deviceKey, getDeviceStatus(order, groupEntry.deviceKey))).find(Boolean) || ""
@@ -5704,12 +5454,11 @@
           ? groupEntries.map((groupEntry) => reofferPendingAgeBadgeHTML(order, groupEntry.deviceKey, getDeviceStatus(order, groupEntry.deviceKey))).find(Boolean) || ""
           : reofferPendingAgeBadgeHTML(order, groupEntries[0]?.deviceKey || deviceKey, deviceStatus);
         const paymentGroup = getPaymentMethodGroup(order);
-
         if (showReadyToPayPaymentGroups && paymentGroup.key !== lastReadyToPayPaymentGroupKey) {
           lastReadyToPayPaymentGroupKey = paymentGroup.key;
           rowHtml.push(`
             <tr class="border-t border-slate-200">
-              <td colspan="6" class="px-4 py-2 bg-slate-50">
+              <td colspan="5" class="px-4 py-2">
                 <div class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${paymentGroup.headerClass}">
                   ${esc(paymentGroup.label)} payouts
                 </div>
@@ -5717,117 +5466,102 @@
             </tr>
           `);
         }
+        const readyToPayPaymentRowClass = showReadyToPayPaymentGroups ? paymentGroup.rowClass : 'bg-white hover:bg-slate-50';
 
         rowHtml.push(`
-          <tr class="${rowTone} border-t border-slate-200 cursor-pointer transition-colors" data-order-row="${esc(order.id)}" ${deviceKey ? `data-device-key="${esc(deviceKey)}"` : ""} data-device-group-keys="${deviceGroupKeysAttr}">
-            <td class="px-4 py-4 align-top w-10">
-              <input type="checkbox" data-order-checkbox="${esc(order.id)}" class="h-4 w-4 rounded border-slate-300 text-slate-900 mt-1" ${state.selectedOrderIds.has(order.id) ? "checked" : ""} />
-            </td>
-            <td class="px-4 py-4 align-top min-w-0">
-              <div class="flex items-start gap-3 min-w-0">
-                <span class="mt-1.5 h-2.5 w-2.5 rounded-full ${dotClass} shrink-0" aria-hidden="true"></span>
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="font-bold text-slate-950 admin-break-anywhere">${esc(customerName)}</span>
-                    <span class="rounded-full border border-slate-200 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-slate-500">#${esc(order.id)}</span>
-                    ${showGrouped ? `<span class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700 border border-indigo-200">${esc(groupedLabel)}</span>` : splitStatusBadge}
-                  </div>
-                  <div class="mt-1 text-xs text-slate-500 admin-break-anywhere">
-                    ${customerPhone ? `<span class="font-medium text-slate-700">${esc(customerPhone)}</span>` : ""}
-                    ${customerPhone && customerEmail ? `<span class="mx-1 text-slate-300">•</span>` : ""}
-                    ${customerEmail ? `<span>${esc(compactEmail(customerEmail))}</span>` : ""}
-                  </div>
-                  <div class="mt-1 text-[11px] text-slate-400 admin-break-anywhere">${esc(addressLine)}</div>
-                </div>
+          <tr class="${readyToPayPaymentRowClass} border-t border-slate-200 cursor-pointer" data-order-row="${esc(order.id)}" ${deviceKey ? `data-device-key="${esc(deviceKey)}"` : ""} data-device-group-keys="${deviceGroupKeysAttr}">
+            <td class="px-4 py-3 align-top">
+              <div class="flex items-start gap-3">
+                <input type="checkbox" data-order-checkbox="${esc(order.id)}" class="h-4 w-4 rounded border-slate-300 text-indigo-600 mt-1" ${state.selectedOrderIds.has(order.id) ? "checked" : ""} />
+                <span class="inline-block w-1.5 h-full min-h-[40px] rounded-full ${getStatusAccentBgClass(deviceStatus)}" aria-hidden="true"></span>
               </div>
             </td>
-            <td class="px-4 py-4 align-top min-w-0">
-              <div class="text-sm font-bold text-slate-900 admin-break-anywhere">${esc(primaryDevice.label)}</div>
-              ${primaryDevice.condition ? `<div class="mt-1 text-xs text-slate-500 admin-break-anywhere">Condition: ${esc(primaryDevice.condition)}</div>` : ""}
-              ${showGrouped ? `
-                <div class="mt-2 space-y-1 text-xs text-slate-500">
-                  ${deviceSummaries.slice(0, 3).map((summary) => `<div class="admin-break-anywhere">• ${esc(summary.label)}${summary.condition ? ` — ${esc(summary.condition)}` : ""}</div>`).join("")}
-                  ${deviceSummaries.length > 3 ? `<div class="text-slate-400">+${deviceSummaries.length - 3} more devices</div>` : ""}
+            <td class="px-4 py-3 align-top min-w-0">
+              <div class="flex flex-col gap-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-bold text-slate-900 admin-break-anywhere">#${esc(order.id)}</span>
+                  ${showGrouped ? `<span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">${esc(groupedLabel)}</span>` : (orderHasDeviceWithStatus(order, deviceStatus) && getOrderDeviceEntries(order).length > 1 && groupEntries.length === 1 ? `<span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Split status</span>` : '')}
+                  <span class="text-xs text-slate-500">${esc(formatDate(createdAt))}</span>
+                  <span class="text-xs text-slate-400">•</span>
+                  <span class="text-xs text-slate-500">${esc(getOrderAge(createdAt))}</span>
+                  ${past14DaysBadgeHTML(order)}
                 </div>
-              ` : ""}
-              ${past14DaysBadgeHTML(order)}
-              ${renderTicketBadges(order)}
+                <div class="text-xs text-slate-500 admin-break-anywhere">
+                  <span class="font-semibold text-slate-700">${esc(order?.shippingInfo?.fullName || "Guest")}</span>
+                  ${order?.shippingInfo?.phone ? ` • <span>${esc(order.shippingInfo.phone)}</span>` : ""}
+                  ${order?.shippingInfo?.email ? ` • <span>${esc(order.shippingInfo.email)}</span>` : ""}
+                </div>
+                <div class="text-sm text-slate-800 font-semibold mt-1 admin-break-anywhere">
+                  ${esc(primaryDevice.label)}
+                  ${responseBadgeHtml}
+                  ${renderTicketBadges(order)}
+                </div>
+                ${showGrouped ? `
+                  <div class="text-xs text-slate-500 space-y-1 mt-1">
+                    ${deviceSummaries.map((summary) => `<div>• ${esc(summary.label)}${summary.condition ? ` • ${esc(summary.condition)}` : ""}</div>`).join("")}
+                  </div>
+                ` : ""}
+                <div class="text-xs font-bold text-emerald-700 mt-0.5">
+                  Payout: $${esc(Number(payoutTotal || 0).toFixed(2))}
+                </div>
+                ${lastUp ? `<div class="text-[11px] text-slate-400">Last update: ${esc(formatDate(lastUp))}</div>` : ""}
+              </div>
             </td>
-            <td class="px-4 py-4 align-top min-w-0">
-              <div class="text-lg font-extrabold text-slate-950">$${esc(Number(payoutTotal || 0).toFixed(2))}</div>
-              <div class="mt-1 inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-2 py-0.5 text-[11px] font-bold text-slate-600">${esc(paymentMethod)}</div>
-              ${payoutInfo && payoutInfo !== "N/A" ? `<div class="mt-1 text-[11px] text-slate-500 admin-break-anywhere">${esc(payoutInfo)}</div>` : ""}
-            </td>
-            <td class="px-4 py-4 align-top min-w-0">
-              <div class="flex flex-col items-start gap-1.5">
+            <td class="px-4 py-3 align-top min-w-0">
+              <div class="flex flex-col items-start gap-1">
                 ${statusBadgeHTML(deviceStatus, statusExtra)}
-                <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-0.5 text-[11px] font-bold text-slate-700">
-                  <i data-lucide="arrow-right" style="width:12px;height:12px"></i>${esc(nextAction)}
-                </span>
                 ${acceptanceBadgeHtml}
                 ${reofferAgeBadgeHtml}
-                ${responseBadgeHtml}
-                <span class="text-[11px] text-slate-400">${esc(formatDate(createdAt))} • ${esc(getOrderAge(createdAt))}</span>
-                ${lastUp ? `<span class="text-[11px] text-slate-400">Updated ${esc(formatDate(lastUp))}</span>` : ""}
               </div>
             </td>
-            <td class="px-4 py-4 align-top min-w-0">
+            <td class="px-4 py-3 align-top min-w-0">
               ${trackingNumber ? `
-                <a class="inline-flex max-w-[170px] items-center gap-1 rounded-lg border border-blue-200 bg-white px-2.5 py-1 text-xs font-bold text-blue-700 hover:bg-blue-50 admin-break-anywhere" href="${trackingLink}" target="_blank" rel="noreferrer">
-                  <i data-lucide="truck" style="width:13px;height:13px"></i>${esc(trackingNumber)}
+                <a class="text-sm font-semibold text-indigo-700 hover:underline admin-break-anywhere" href="${trackingLink}" target="_blank" rel="noreferrer">
+                  ${esc(trackingNumber)}
                 </a>
-              ` : `<span class="inline-flex items-center rounded-lg border border-slate-200 bg-white/70 px-2.5 py-1 text-xs font-semibold text-slate-400">No tracking</span>`}
-              <div class="mt-2 flex flex-col gap-1.5">
-                <button type="button" data-view-order="${esc(order.id)}" ${deviceKey ? `data-view-device-key="${esc(deviceKey)}"` : ""} data-view-device-group-keys="${deviceGroupKeysAttr}" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-800">
-                  <i data-lucide="panel-right-open" style="width:13px;height:13px"></i>Open
+              ` : `<span class="text-sm text-slate-400">N/A</span>`}
+            </td>
+            <td class="px-4 py-3 align-top">
+              <div class="admin-action-grid">
+                <button type="button" data-view-order="${esc(order.id)}" ${deviceKey ? `data-view-device-key="${esc(deviceKey)}"` : ""} data-view-device-group-keys="${deviceGroupKeysAttr}" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800">
+                  View
                 </button>
-                <button type="button" data-print-order-slip="${esc(order.id)}" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50">
-                  <i data-lucide="printer" style="width:13px;height:13px"></i>Slip
+                <button type="button" data-print-order-slip="${esc(order.id)}" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+                  Print packing slip
                 </button>
               </div>
             </td>
           </tr>
         `);
       }
-
       const showNoResults = !rowHtml.length;
       const noResultsBody = state.ordersLoading
-        ? `<tr><td colspan="6" class="px-6 py-10 text-center text-slate-500">Loading orders… ${esc(String(state.allOrders.length))} loaded</td></tr>`
+        ? `<tr><td colspan="5" class="px-6 py-10 text-center text-slate-500">Loading orders… ${esc(String(state.allOrders.length))} loaded</td></tr>`
         : state.currentSearchTerm
         ? `<tr>
-            <td colspan="6" class="px-6 py-10 text-center text-slate-500">
+            <td colspan="5" class="px-6 py-10 text-center text-slate-500">
               <div class="space-y-3">
                 <div class="text-base font-semibold text-slate-700">No results found.</div>
                 <button id="clearSearchBtn" type="button" class="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">Clear search</button>
               </div>
             </td>
           </tr>`
-        : `<tr><td colspan="6" class="px-6 py-10 text-center text-slate-500">No orders in this status.</td></tr>`;
+        : `<tr><td colspan="5" class="px-6 py-10 text-center text-slate-500">No orders found.</td></tr>`;
       const body = showNoResults ? noResultsBody : rowHtml.join("");
       const densityClass = state.compactDensity ? "density-compact" : "density-default";
       return `
-        <section class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          <div class="flex flex-col gap-2 border-b border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div class="text-sm font-bold text-slate-900">Orders</div>
-              <div class="text-xs text-slate-500">Customer, device, payout, next action, and tracking in one line.</div>
-            </div>
-            <div class="text-xs text-slate-500">
-              Showing <b>${Math.min(end, total)}</b> of <b>${total}</b> rows
-            </div>
-          </div>
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
           <div class="w-full overflow-x-auto">
-            <table class="admin-table text-left border-collapse min-w-[1180px]">
+            <table class="admin-table text-left border-collapse">
               <thead>
-                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase text-slate-500 font-bold tracking-wider">
-                  <th class="px-4 py-3 w-10">
-                    <input id="select-all-orders" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-slate-900" />
+                <tr class="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold tracking-wider">
+                  <th class="px-4 py-4 w-10">
+                    <input id="select-all-orders" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600" />
                   </th>
-                  <th class="px-4 py-3 w-[24%]">Customer</th>
-                  <th class="px-4 py-3 w-[27%]">Device</th>
-                  <th class="px-4 py-3 w-[13%]">Payout</th>
-                  <th class="px-4 py-3 w-[21%]">Status / Next</th>
-                  <th class="px-4 py-3 w-[15%]">Tracking / Actions</th>
+                  <th class="px-4 py-4">Order / Device</th>
+                  <th class="px-4 py-4">Status</th>
+                  <th class="px-4 py-4">Tracking</th>
+                  <th class="px-4 py-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody id="ordersTableBody" class="divide-y divide-slate-100 ${densityClass}">
@@ -5835,51 +5569,46 @@
               </tbody>
             </table>
           </div>
-          <div class="px-4 sm:px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <span class="text-xs text-slate-500">
-              Page <b>${page}</b> / <b>${totalPages}</b>
+              Showing <b>${Math.min(end, total)}</b> of <b>${total}</b> rows • Page <b>${page}</b> / <b>${totalPages}</b>
             </span>
             <div class="flex gap-2">
-              <button data-page="first" class="px-3 py-1.5 border border-slate-300 bg-white rounded-lg text-xs font-semibold hover:bg-slate-50 ${page===1 ? "opacity-50 cursor-not-allowed" : ""}" ${page===1 ? "disabled" : ""}>First</button>
-              <button data-page="prev" class="px-3 py-1.5 border border-slate-300 bg-white rounded-lg text-xs font-semibold hover:bg-slate-50 ${page===1 ? "opacity-50 cursor-not-allowed" : ""}" ${page===1 ? "disabled" : ""}>Prev</button>
-              <button data-page="next" class="px-3 py-1.5 border border-slate-300 bg-white rounded-lg text-xs font-semibold hover:bg-slate-50 ${page===totalPages ? "opacity-50 cursor-not-allowed" : ""}" ${page===totalPages ? "disabled" : ""}>Next</button>
-              <button data-page="last" class="px-3 py-1.5 border border-slate-300 bg-white rounded-lg text-xs font-semibold hover:bg-slate-50 ${page===totalPages ? "opacity-50 cursor-not-allowed" : ""}" ${page===totalPages ? "disabled" : ""}>Last</button>
+              <button data-page="first" class="px-3 py-1.5 border border-slate-300 bg-white rounded text-xs font-semibold hover:bg-slate-50 ${page===1 ? "opacity-50 cursor-not-allowed" : ""}" ${page===1 ? "disabled" : ""}>First</button>
+              <button data-page="prev" class="px-3 py-1.5 border border-slate-300 bg-white rounded text-xs font-semibold hover:bg-slate-50 ${page===1 ? "opacity-50 cursor-not-allowed" : ""}" ${page===1 ? "disabled" : ""}>Prev</button>
+              <button data-page="next" class="px-3 py-1.5 border border-slate-300 bg-white rounded text-xs font-semibold hover:bg-slate-50 ${page===totalPages ? "opacity-50 cursor-not-allowed" : ""}" ${page===totalPages ? "disabled" : ""}>Next</button>
+              <button data-page="last" class="px-3 py-1.5 border border-slate-300 bg-white rounded text-xs font-semibold hover:bg-slate-50 ${page===totalPages ? "opacity-50 cursor-not-allowed" : ""}" ${page===totalPages ? "disabled" : ""}>Last</button>
             </div>
           </div>
-        </section>
+        </div>
       `;
     }
     function renderOrdersPage() {
       return `
-        <main class="flex-1 min-w-0 p-3 sm:p-5 bg-slate-50">
-          <div class="mx-auto flex max-w-[1600px] flex-col gap-4">
-            <section class="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 sm:p-5">
-              <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2">
-                    <h2 class="text-xl sm:text-2xl font-extrabold text-slate-950 tracking-tight">${IS_AGING_PAGE ? "Aging orders" : "Orders"}</h2>
-                    ${state.refreshingOrders ? `<span class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700"><span class="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span>Refreshing</span>` : ""}
-                  </div>
-                  <p class="mt-1 text-sm text-slate-500">Process orders by next action, status, payout method, and tracking.</p>
-                </div>
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center xl:min-w-[620px]">
-                  <div class="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <i data-lucide="search" class="text-slate-400" style="width:18px;height:18px"></i>
-                    <input id="searchInput" type="text" value="${esc(state.currentSearchTerm)}"
-                      placeholder="Search name, order, device, email, tracking..."
-                      class="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400" />
-                    ${state.currentSearchTerm ? `<button id="clearSearchInlineBtn" type="button" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50">Clear</button>` : ""}
-                  </div>
-                  <label class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600">
-                    <input id="compactDensityToggle" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-slate-900" ${state.compactDensity ? "checked" : ""} />
-                    Compact rows
-                  </label>
-                </div>
+        <main class="flex-1 min-w-0 p-4 sm:p-6">
+          <div class="mx-auto flex max-w-[1600px] flex-col gap-5">
+            <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+              <div>
+                <h2 class="text-2xl font-bold text-slate-900 tracking-tight">${IS_AGING_PAGE ? "Aging Orders" : "Order Management"}</h2>
+                <p class="text-sm text-slate-500 mt-1">Filter, bulk-process, and manage fulfillment without breaking backend routes.</p>
               </div>
-            </section>
+              <div class="flex items-center gap-2">
+                <label class="flex items-center gap-2 text-sm text-slate-600">
+                  <input id="compactDensityToggle" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600" ${state.compactDensity ? "checked" : ""} />
+                  Compact
+                </label>
+              </div>
+            </div>
             ${updateGlassMetricsHTML()}
             ${renderStatusBreakdown()}
             ${renderBulkBar()}
+            <div class="w-full flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              <i data-lucide="search" class="text-slate-400" style="width:18px;height:18px"></i>
+              <input id="searchInput" type="text" value="${esc(state.currentSearchTerm)}"
+                placeholder="Search orders..."
+                class="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400" />
+              ${state.currentSearchTerm ? `<button id="clearSearchInlineBtn" type="button" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">Clear</button>` : ""}
+            </div>
             ${renderOrdersTable()}
           </div>
         </main>
@@ -6002,6 +5731,19 @@
         const composeTo = state.ticketComposeTo || customerEmail;
         const composeSubject = state.ticketComposeSubject || defaultSubject;
         const timeline = (ticket.messages || []).map((message, idx) => {
+          console.log("[EmailsTab message]", {
+            id: message.id,
+            direction: message.direction,
+            fromEmail: message.fromEmail,
+            toEmail: message.toEmail,
+            subject: message.subject,
+            emailType: message.emailType,
+            emailTypeLabel: message.emailTypeLabel,
+            timestamp: message.timestamp,
+            gmailMessageId: message.gmailMessageId,
+            gmailThreadId: message.gmailThreadId,
+            labelIds: message.labelIds
+          });
           const direction = String(message.direction || "").trim().toLowerCase();
           const isSent = direction === "sent";
           const isReceived = direction === "received";
@@ -6223,28 +5965,6 @@
         }).join("");
         return `
           <div class="space-y-6">
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div class="admin-section-card p-4">
-                <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Customer</div>
-                <div class="mt-1 truncate text-lg font-bold text-slate-950">${esc(order.shippingInfo?.fullName || order.customerName || "Unknown customer")}</div>
-                <div class="mt-1 truncate text-sm text-slate-500">${esc(customerEmailValue)}</div>
-              </div>
-              <div class="admin-section-card p-4">
-                <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Status</div>
-                <div class="mt-2">${statusBadgeHTML(headerStatus)}</div>
-                <div class="mt-2 text-sm text-slate-500">Created ${esc(formatDate(order.createdAt))}</div>
-              </div>
-              <div class="admin-section-card p-4">
-                <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Payout</div>
-                <div class="mt-1 text-2xl font-extrabold text-slate-950">$${esc(Number(getOrderPayoutTotal(order) || 0).toFixed(2))}</div>
-                <div class="mt-1 capitalize text-sm text-slate-500">${esc(payoutMethodDisplay)}</div>
-              </div>
-              <div class="admin-section-card p-4">
-                <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Next Step</div>
-                <div class="mt-1 text-base font-bold text-slate-900">${esc(formatStatusLabel(headerStatus))}</div>
-                <div class="mt-1 text-sm text-slate-500">Use the sticky action bar below.</div>
-              </div>
-            </div>
             <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
               <div class="p-4 flex items-center justify-between border-b border-slate-100 bg-slate-50/50">
                 <h3 class="font-semibold text-slate-700 flex items-center gap-2">
@@ -6464,6 +6184,19 @@
         const defaultSubject = `Order ${order.id}`;
         const messages = Array.isArray(ticket?.messages) ? ticket.messages : [];
         const messageRows = messages.map((msg, idx) => {
+          console.log("[EmailsTab message]", {
+            id: msg.id,
+            direction: msg.direction,
+            fromEmail: msg.fromEmail || msg.from,
+            toEmail: msg.toEmail || msg.to,
+            subject: msg.subject,
+            emailType: msg.emailType,
+            emailTypeLabel: msg.emailTypeLabel,
+            timestamp: msg.timestamp || msg.sentAt || msg.receivedAt || msg.createdAt,
+            gmailMessageId: msg.gmailMessageId,
+            gmailThreadId: msg.gmailThreadId,
+            labelIds: msg.labelIds
+          });
           const direction = String(msg.direction || "").trim().toLowerCase();
           const isSent = direction === "sent";
           const isReceived = direction === "received";
@@ -6698,13 +6431,13 @@
         : (state.drawerTab === "ticket" || state.drawerTab === "emails") ? emailsHTML()
         : logsHTML();
       return `
-        <div class="fixed inset-0 z-[1002] flex justify-end" aria-live="polite">
-          <div class="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px] transition-opacity" data-drawer-backdrop="1"></div>
-          <section class="admin-drawer-panel relative flex flex-col" data-admin-order-drawer="1" role="dialog" aria-modal="true" aria-labelledby="orderDrawerTitle">
-            <div class="admin-drawer-header relative z-[1009] px-3 sm:px-6 py-3 sm:py-4 flex justify-between items-start sticky top-0">
+        <div class="fixed inset-0 z-[1002] flex justify-end">
+          <div class="absolute inset-0 bg-slate-900/30 backdrop-blur-sm transition-opacity" data-close-drawer="1"></div>
+          <div class="relative w-screen max-w-[1120px] bg-white h-[100dvh] max-h-[100dvh] shadow-2xl flex flex-col">
+            <div class="relative bg-white z-[1009] px-3 sm:px-6 py-3 sm:py-4 flex justify-between items-start sticky top-0">
               <div class="relative">
                 <div class="flex items-center gap-2 sm:gap-3 mb-1 flex-wrap pr-2">
-                  <h2 id="orderDrawerTitle" class="text-xl sm:text-2xl font-bold text-slate-900">#${esc(order.id)}</h2>
+                  <h2 class="text-xl sm:text-2xl font-bold text-slate-900">#${esc(order.id)}</h2>
                   <div class="relative z-[1300]" id="modalStatusWrapper">
                     <button id="modalStatusBtn" class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusClass(headerStatus)} hover:opacity-90">
                       ${esc(formatStatusLabel(headerStatus))}
@@ -6718,33 +6451,31 @@
                   Created ${esc(formatDate(order.createdAt))} (${esc(getOrderAge(order.createdAt))})
                 </p>
               </div>
-              <button class="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors" data-close-drawer="1" aria-label="Close order drawer">
+              <button class="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors" data-close-drawer="1">
                 <i data-lucide="x" style="width:24px;height:24px"></i>
               </button>
             </div>
             ${workflowStepperHTML(order, headerStatus)}
-            <div class="px-3 sm:px-6 py-2 border-b border-slate-200 bg-slate-50/70 admin-drawer-tabs overflow-x-auto whitespace-nowrap" role="tablist" aria-label="Order drawer sections">
+            <div class="px-3 sm:px-6 border-b border-slate-200 bg-slate-50/50 admin-drawer-tabs overflow-x-auto whitespace-nowrap">
               ${tabs.map(t => `
                 <button data-drawer-tab="${t.id}"
-                  id="drawer-tab-${t.id}"
-                  role="tab"
-                  aria-selected="${state.drawerTab === t.id ? "true" : "false"}"
-                  aria-controls="orderDrawerTabPanel"
-                  tabindex="${state.drawerTab === t.id ? "0" : "-1"}"
-                  class="admin-drawer-tab-chip inline-flex items-center gap-2 text-sm font-semibold transition-colors whitespace-nowrap">
+                  class="flex items-center gap-2 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    state.drawerTab === t.id
+                      ? "border-indigo-600 text-indigo-600"
+                      : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                  }">
                   <i data-lucide="${t.icon}" style="width:16px;height:16px"></i>
                   ${esc(t.label)}
                 </button>
               `).join("")}
             </div>
-            <div id="orderDrawerScrollBody" role="tabpanel" aria-labelledby="drawer-tab-${state.drawerTab}" class="p-3 sm:p-5 lg:p-6 space-y-4 sm:space-y-6 flex-1 overflow-y-auto bg-slate-50/60 min-w-0" style="padding-bottom: calc(13rem + env(safe-area-inset-bottom));">
-              ${state.selectedOrderHydrating ? `<div class="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">Refreshing full order details…</div>` : ""}
+            <div id="orderDrawerScrollBody" class="p-3 sm:p-5 lg:p-6 space-y-4 sm:space-y-6 flex-1 overflow-y-auto bg-slate-50/30 min-w-0" style="padding-bottom: calc(14rem + env(safe-area-inset-bottom));">
               ${tabContent}
             </div>
-            <div class="admin-drawer-footer p-3 sm:p-4 lg:p-5 z-10 max-h-[38vh] overflow-y-auto sticky bottom-0" style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));">
+            <div class="border-t border-slate-200 p-3 sm:p-4 lg:p-5 bg-white z-10 max-h-[38vh] overflow-y-auto sticky bottom-0" style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));">
               ${renderDrawerFooter(order)}
             </div>
-          </section>
+          </div>
         </div>
       `;
     }
@@ -7905,10 +7636,11 @@
                 </div>
               </main>
             `}
-            <footer class="border-t border-slate-200 bg-white px-4 sm:px-8 py-3">
-              <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
-                <span>SecondHandCell Operations</span>
-                <span>${state.refreshingOrders ? "Refreshing order data…" : esc(getLastRefreshLabel())}</span>
+            <footer class="border-t border-slate-200 bg-white px-4 sm:px-8 py-4">
+              <div class="flex flex-wrap items-center justify-center gap-4 sm:justify-end">
+                <div class="mx-auto mt-10 max-w-sm">
+                  <div class="trustpilot-widget" data-locale="en-US" data-template-id="56278e9abfbbba0bdcd568bc" data-businessunit-id="68c8cb56da935f8a761f99a9" data-style-height="52px" data-style-width="100%" data-token="5b88bae4-1400-45d0-81d4-480b85d61b76" style="position: relative;"><iframe title="Customer reviews powered by Trustpilot" loading="auto" src="https://widget.trustpilot.com/trustboxes/56278e9abfbbba0bdcd568bc/index.html?templateId=56278e9abfbbba0bdcd568bc&amp;businessunitId=68c8cb56da935f8a761f99a9#locale=en-US&amp;styleHeight=52px&amp;styleWidth=100%25&amp;token=5b88bae4-1400-45d0-81d4-480b85d61b76" style="position: relative; height: 52px; width: 100%; border-style: none; display: block; overflow: hidden;"></iframe></div>
+                </div>
               </div>
             </footer>
           </div>
@@ -7989,6 +7721,7 @@
         }
         const result = await apiGet(`/orders/${orderId}/email-ticket`);
         const messages = Array.isArray(result?.ticket?.messages) ? result.ticket.messages : [];
+        console.log("[EmailsTab refresh result]", messages);
         state.emailTicketsByOrder[orderId] = result.ticket || null;
       } catch (error) {
         toast(error?.message || (sync ? "Could not sync Gmail replies. Please try again." : "Failed to load email ticket"), "error");
@@ -8220,8 +7953,11 @@
       });
     }
     function render() {
-      if (state?.user) preserveWindowScrollForNextRender();
-      scheduleRender();
+      if (scheduledRenderFrame) {
+        cancelAnimationFrame(scheduledRenderFrame);
+        scheduledRenderFrame = 0;
+      }
+      doRender();
     }
     // ----------------------------
     // EVENTS
@@ -8321,49 +8057,10 @@
         }
       }
 
-      if (!state.globalAdminActionGuardBound) {
-        document.addEventListener("click", (event) => {
-          const btn = event.target.closest("button[data-action], button[data-ticket-action], button[data-send-email-ticket], button[data-save-customer-email], button[data-save-resend-customer-email]");
-          if (!btn || btn.disabled) return;
-          const isActionButton = btn.hasAttribute("data-action") || btn.hasAttribute("data-ticket-action") || btn.hasAttribute("data-send-email-ticket") || btn.hasAttribute("data-save-customer-email") || btn.hasAttribute("data-save-resend-customer-email");
-          if (!isActionButton) return;
-          if (btn.dataset.adminClickBusy === "1") {
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            return;
-          }
-          btn.dataset.adminClickBusy = "1";
-          btn.setAttribute("aria-busy", "true");
-          setTimeout(() => {
-            if (!document.body.contains(btn)) return;
-            delete btn.dataset.adminClickBusy;
-            btn.removeAttribute("aria-busy");
-          }, 4000);
-        }, true);
-        state.globalAdminActionGuardBound = true;
-      }
-
       if (!state.abandonedSequenceGlobalKeyBound) {
         document.addEventListener("keydown", (event) => {
           const pressedKey = typeof event?.key === "string" ? event.key : "";
           if (!pressedKey) return;
-          if (state.selectedOrderId && !hasTransientOverlayOpen()) {
-            const drawer = document.querySelector('[data-admin-order-drawer="1"]');
-            if (pressedKey === "Escape") {
-              event.preventDefault();
-              closeOrderDrawer();
-              return;
-            }
-            if (pressedKey === "Tab" && drawer) {
-              const focusables = Array.from(drawer.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter((el) => el.offsetParent !== null);
-              if (focusables.length) {
-                const first = focusables[0];
-                const last = focusables[focusables.length - 1];
-                if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); return; }
-                if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); return; }
-              }
-            }
-          }
           if (event.metaKey || event.ctrlKey || event.altKey) return;
           if (pressedKey === "Escape") {
             abandonedSequenceTypedBuffer = "";
@@ -8429,7 +8126,23 @@
             const openEmailTicket = orderBtn.hasAttribute("data-open-order-email-ticket");
             const groupedKeys = (orderBtn.getAttribute("data-view-device-group-keys") || "").split(",").map((value) => value.trim()).filter(Boolean);
             if (!orderId) return;
-            openOrderDrawer(orderId, { deviceKey, groupedKeys, tab: openEmailTicket ? "emails" : "overview", trigger: orderBtn });
+            state.selectedOrderId = orderId;
+            state.selectedOrderSnapshot = state.allOrders.find(o => o.id === orderId) || state.selectedOrderSnapshot || null;
+            state.selectedDeviceKey = deviceKey || null;
+            state.selectedDeviceGroupKeys = (!deviceKey && groupedKeys.length > 1) ? groupedKeys : [];
+            state.qcDeviceKey = deviceKey || null;
+            state.drawerTab = openEmailTicket ? "emails" : "overview";
+            state.statusDropdownOpen = false;
+            state.qcOpen = false;
+            state.qcStep = 1;
+            state.qcData = null;
+            state.reofferOpen = false;
+            state.reofferData = null;
+            state.reofferValidation = { message: "", fields: {} };
+            state.unlockInfoModalOpen = false;
+            state.unlockInfoModalData = null;
+            render();
+            hydrateSelectedOrderDetails(orderId);
             if (openEmailTicket) {
               loadEmailTicket(orderId);
             }
@@ -8701,7 +8414,16 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
           const deviceKey = row.getAttribute("data-device-key");
           const groupedKeys = (row.getAttribute("data-device-group-keys") || "").split(",").map((value) => value.trim()).filter(Boolean);
           if (!orderId) return;
-          openOrderDrawer(orderId, { deviceKey, groupedKeys, tab: "overview", trigger: row });
+          state.selectedOrderId = orderId;
+          state.selectedOrderSnapshot = state.allOrders.find(o => o.id === orderId) || state.selectedOrderSnapshot || null;
+          state.selectedDeviceKey = deviceKey || null;
+          state.selectedDeviceGroupKeys = (!deviceKey && groupedKeys.length > 1) ? groupedKeys : [];
+          state.qcDeviceKey = deviceKey || null;
+          state.drawerTab = "overview";
+          state.unlockInfoModalOpen = false;
+          state.unlockInfoModalData = null;
+          render();
+          hydrateSelectedOrderDetails(orderId);
         });
       });
 
@@ -8791,39 +8513,36 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
       });
       // Drawer close
       document.querySelectorAll("[data-close-drawer]").forEach(el => {
-        el.addEventListener("click", () => closeOrderDrawer());
-      });
-      document.querySelectorAll("[data-drawer-backdrop]").forEach(el => {
         el.addEventListener("click", () => {
-          if (hasTransientOverlayOpen()) return;
-          closeOrderDrawer();
+          state.selectedOrderId = null;
+          state.selectedOrderSnapshot = null;
+          state.modalScrollTop.drawer = 0;
+          state.selectedDeviceKey = null;
+          state.selectedDeviceGroupKeys = [];
+          state.qcDeviceKey = null;
+          state.statusDropdownOpen = false;
+          state.qcOpen = false;
+          state.modalScrollTop.qc = 0;
+          state.qcStep = 1;
+          state.qcData = null;
+          state.reofferOpen = false;
+          state.reofferData = null;
+          state.reofferValidation = { message: "", fields: {} };
+          state.unlockInfoModalOpen = false;
+          state.unlockInfoModalData = null;
+          state.modalScrollTop.reoffer = 0;
+          render();
         });
       });
       // Drawer tab switching
       document.querySelectorAll("[data-drawer-tab]").forEach(btn => {
-        const switchDrawerTab = () => {
-          const nextTab = btn.getAttribute("data-drawer-tab");
-          if (!nextTab || state.drawerTab === nextTab) return;
-          state.drawerTab = nextTab;
+        btn.addEventListener("click", () => {
+          state.drawerTab = btn.getAttribute("data-drawer-tab");
           render();
           const order = getSelectedOrder();
           if (state.drawerTab === "emails" && order?.id && !state.emailTicketsByOrder[order.id]) {
             loadEmailTicket(order.id);
           }
-        };
-        btn.addEventListener("click", switchDrawerTab);
-        btn.addEventListener("keydown", (event) => {
-          if (!["Enter", " ", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-          event.preventDefault();
-          const tabs = Array.from(document.querySelectorAll("[data-drawer-tab]"));
-          const currentIndex = tabs.indexOf(btn);
-          if (event.key === "Enter" || event.key === " ") return switchDrawerTab();
-          let nextIndex = currentIndex;
-          if (event.key === "ArrowRight") nextIndex = Math.min(tabs.length - 1, currentIndex + 1);
-          if (event.key === "ArrowLeft") nextIndex = Math.max(0, currentIndex - 1);
-          if (event.key === "Home") nextIndex = 0;
-          if (event.key === "End") nextIndex = tabs.length - 1;
-          tabs[nextIndex]?.focus();
         });
       });
       document.querySelectorAll("[data-refresh-email-ticket]").forEach(btn => {
@@ -10073,8 +9792,6 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
         state.authLoading = false;
         const hydratedFromCache = state.ordersCacheHydrated || await hydrateOrdersFromLocalCache();
         state.ordersLoading = !hydratedFromCache;
-        state.initialOrdersLoading = !hydratedFromCache;
-        state.refreshingOrders = !!hydratedFromCache;
         if (!hydratedFromCache) {
           state.appBooting = true;
           state.appBootProgress = 14;
