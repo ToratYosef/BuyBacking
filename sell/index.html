@@ -133,8 +133,28 @@
                 @apply fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[2000] flex items-center justify-center p-4 transition-opacity duration-300;
             }
             .modal-card {
-                @apply bg-white rounded-[2.5rem] p-8 md:p-10 w-full max-w-md shadow-[0_30px_60px_rgba(0,0,0,0.2)] transform transition-transform duration-300 relative overflow-hidden;
+                @apply bg-white rounded-[2.5rem] p-8 md:p-10 w-full max-w-md shadow-[0_30px_60px_rgba(0,0,0,0.2)] transform transition-transform duration-300 relative;
+                max-height: calc(100dvh - 2rem);
+                overflow-y: auto;
                 animation: modalBounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            }
+            .modal-overlay {
+                overflow-y: auto;
+                align-items: flex-start;
+            }
+            @media (min-height: 720px) {
+                .modal-overlay { align-items: center; }
+            }
+            .device-confirm-card {
+                max-width: 22rem !important;
+                padding: 1.25rem !important;
+                border-radius: 1.75rem !important;
+            }
+            @media (min-width: 640px) {
+                .device-confirm-card {
+                    max-width: 24rem !important;
+                    padding: 1.5rem !important;
+                }
             }
             @keyframes modalBounce {
                 0% { opacity: 0; transform: scale(0.9) translateY(20px); }
@@ -237,7 +257,7 @@
 
             <section class="flex-grow order-1 lg:order-2 flex flex-col pt-2 lg:pt-0 pb-16 lg:pb-0 z-10">
                 
-                <div class="mb-8 lg:mb-10">
+                <div id="step-heading-wrap" class="mb-8 lg:mb-10 w-full mx-auto text-center">
                     <h2 id="step-name" class="text-4xl lg:text-5xl font-black tracking-tight text-slate-900 mb-3">Select Brand</h2>
                     <p id="step-subtitle" class="text-lg text-slate-500 font-medium">Choose your device line and answer a few quick questions.</p>
                 </div>
@@ -423,21 +443,21 @@
 </div>
 
 <div class="modal-overlay hidden" id="device-confirm-modal" aria-hidden="true">
-    <div class="modal-card">
-        <div class="w-20 h-20 bg-blue-50 text-shc-primary rounded-[1.5rem] flex items-center justify-center mb-8 border border-blue-100 text-3xl shadow-sm">
+    <div class="modal-card device-confirm-card">
+        <div class="w-12 h-12 bg-blue-50 text-shc-primary rounded-2xl flex items-center justify-center mb-4 border border-blue-100 text-xl shadow-sm">
             <i class="fa-solid fa-magnifying-glass"></i>
         </div>
-        <h3 class="text-3xl font-black text-slate-900 mb-3 tracking-tight">Verify Model</h3>
-        <p class="text-slate-500 font-medium mb-8 text-lg">Please ensure this is the exact device you possess.</p>
+        <h3 class="text-2xl font-black text-slate-900 mb-2 tracking-tight">Verify Model</h3>
+        <p class="text-slate-500 font-medium mb-4 text-sm leading-relaxed">Please ensure this is the exact device you possess.</p>
         
-        <div class="bg-slate-50 rounded-[2rem] p-8 border border-slate-100 mb-8 shadow-inner flex flex-col items-center">
-            <img id="confirm-device-image" class="h-40 object-contain mb-6 drop-shadow-md" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" loading="lazy">
-            <p id="confirm-device-name" class="font-black text-slate-800 text-2xl text-center leading-tight">--</p>
+        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-100 mb-5 shadow-inner flex flex-col items-center">
+            <img id="confirm-device-image" class="h-28 object-contain mb-3 drop-shadow-md" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" loading="lazy">
+            <p id="confirm-device-name" class="font-black text-slate-800 text-lg text-center leading-tight">--</p>
         </div>
         
-        <div class="flex flex-col gap-4">
-            <button id="confirmDeviceYesBtn" type="button" class="btn-primary py-5 text-xl shadow-[0_10px_20px_rgba(0,113,227,0.2)]">Yes, This Is It</button>
-            <button id="confirmDeviceNoBtn" type="button" class="w-full py-4 rounded-2xl font-bold text-slate-500 bg-white border-2 border-slate-100 hover:bg-slate-50 hover:text-slate-700 transition-all">No, Choose Again</button>
+        <div class="flex flex-col gap-3">
+            <button id="confirmDeviceYesBtn" type="button" class="btn-primary py-3.5 text-base shadow-[0_10px_20px_rgba(0,113,227,0.2)]">Yes, This Is It</button>
+            <button id="confirmDeviceNoBtn" type="button" class="w-full py-3 rounded-2xl font-bold text-sm text-slate-500 bg-white border-2 border-slate-100 hover:bg-slate-50 hover:text-slate-700 transition-all">No, Choose Again</button>
         </div>
     </div>
 </div>
@@ -1055,40 +1075,75 @@
         totalEl.textContent = `$${total.toFixed(2)}`;
         summary.classList.remove('hidden');
     };
-    const addCurrentDeviceToCart = () => {
-        if (!state.deviceData) return;
-        const priceMap = getConditionPriceMap(state.deviceData.prices?.[state.selections.storage]?.[state.selections.lock] || {});
-        const unitPrice = Number(priceMap[state.selections.condition] || 0);
-        const cart = getCart();
-        const key = [
-            state.selections.brand,
-            state.selections.model,
-            state.selections.storage,
-            state.selections.lock,
+    const hasCompleteCurrentDeviceSelection = () => {
+        return Boolean(
+            state.selections.brand &&
+            state.selections.model &&
+            state.selections.storage &&
+            state.selections.lock &&
             state.selections.condition
-        ].join('|');
-        const existing = cart.find(item => item.key === key);
-        if (existing) {
-            existing.qty += state.selections.qty;
-        } else {
-            cart.push({
-                key,
-                brand: state.selections.brand,
-                model: state.selections.model,
-                modelName: state.selections.modelName,
-                deviceSlug: state.selections.deviceSlug || slugify(state.selections.modelName),
-                storage: state.selections.storage,
-                lock: state.selections.lock,
-                condition: state.selections.condition,
-                qty: state.selections.qty,
-                unitPrice,
-                imageUrl: state.deviceData?.imageUrl || '',
-                conditionPrices: priceMap
-            });
+        );
+    };
+
+    const addCurrentDeviceToCart = async () => {
+        const previousCart = getCart();
+        if (!hasCompleteCurrentDeviceSelection()) {
+            updateCartSummary();
+            return previousCart;
         }
-        saveCart(cart);
-        updateCartSummary();
-        return cart;
+
+        try {
+            if (!state.deviceData?.prices) {
+                state.deviceData = await getModelDocData(state.selections.brand, state.selections.model);
+            }
+
+            const priceMap = getConditionPriceMap(state.deviceData?.prices?.[state.selections.storage]?.[state.selections.lock] || {});
+            const rawPrice = Number(priceMap[state.selections.condition] || 0);
+            const unitPrice = Number.isFinite(rawPrice) ? rawPrice : 0;
+            const qty = Math.max(1, Number(state.selections.qty || 1));
+            const modelName = state.selections.modelName || state.deviceData?.name || state.selections.model;
+            const deviceSlug = state.selections.deviceSlug || buildCanonicalDeviceSlug(state.selections.brand, state.selections.model) || slugify(modelName);
+            const cart = previousCart;
+            const key = [
+                state.selections.brand,
+                state.selections.model,
+                state.selections.storage,
+                state.selections.lock,
+                state.selections.condition
+            ].join('|');
+            const existing = cart.find(item => item.key === key);
+            if (existing) {
+                existing.qty = Math.max(1, Number(existing.qty || 1)) + qty;
+                existing.unitPrice = unitPrice;
+                existing.imageUrl = existing.imageUrl || state.deviceData?.imageUrl || '';
+                existing.conditionPrices = priceMap;
+                existing.modelName = existing.modelName || modelName;
+                existing.deviceSlug = existing.deviceSlug || deviceSlug;
+            } else {
+                cart.push({
+                    key,
+                    brand: state.selections.brand,
+                    model: state.selections.model,
+                    modelName,
+                    deviceSlug,
+                    storage: state.selections.storage,
+                    lock: state.selections.lock,
+                    condition: state.selections.condition,
+                    qty,
+                    unitPrice,
+                    imageUrl: state.deviceData?.imageUrl || '',
+                    conditionPrices: priceMap
+                });
+            }
+            saveCart(cart);
+            updateCartSummary();
+            return cart;
+        } catch (error) {
+            console.error('Failed adding current device to cart:', error);
+            saveCart(previousCart);
+            updateCartSummary();
+            return previousCart;
+        }
     };
     const getStoredEmail = () => {
         try {
@@ -1186,10 +1241,23 @@
     };
 
     const applyGridCols = (grid, count) => {
-        grid.classList.remove('grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'sm:grid-cols-3', 'md:grid-cols-4', 'max-w-[280px]', 'max-w-[500px]', 'max-w-[700px]', 'mx-auto');
-        if (count === 1) grid.classList.add('grid-cols-1', 'max-w-[280px]', 'mx-auto');
-        else if (count === 2) grid.classList.add('grid-cols-2', 'max-w-[500px]', 'mx-auto');
-        else if (count === 3) grid.classList.add('grid-cols-2', 'sm:grid-cols-3', 'max-w-[700px]', 'mx-auto');
+        const widthClasses = ['max-w-[280px]', 'max-w-[500px]', 'max-w-[700px]', 'mx-auto'];
+        const stepHeading = document.getElementById('step-heading-wrap') || document.getElementById('step-name')?.parentElement;
+
+        grid.classList.remove('grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'sm:grid-cols-3', 'md:grid-cols-4', ...widthClasses);
+        if (stepHeading) {
+            stepHeading.classList.remove(...widthClasses);
+            stepHeading.classList.add('w-full', 'text-center');
+        }
+
+        const applySharedWidth = (...classes) => {
+            grid.classList.add(...classes);
+            if (stepHeading) stepHeading.classList.add(...classes.filter((className) => widthClasses.includes(className)));
+        };
+
+        if (count === 1) applySharedWidth('grid-cols-1', 'max-w-[280px]', 'mx-auto');
+        else if (count === 2) applySharedWidth('grid-cols-2', 'max-w-[500px]', 'mx-auto');
+        else if (count === 3) applySharedWidth('grid-cols-2', 'sm:grid-cols-3', 'max-w-[700px]', 'mx-auto');
         else grid.classList.add('grid-cols-2', 'md:grid-cols-4');
     };
 
@@ -1863,8 +1931,11 @@
     document.getElementById('qtyPlus').onclick = () => { state.selections.qty++; document.getElementById('qty-val').textContent = state.selections.qty; };
     document.getElementById('qtyMinus').onclick = () => { if(state.selections.qty > 1) state.selections.qty--; document.getElementById('qty-val').textContent = state.selections.qty; };
     document.getElementById('finalSubmitBtn').onclick = async () => {
+        const submitBtn = document.getElementById('finalSubmitBtn');
+        if (submitBtn?.disabled) return;
+        if (submitBtn) submitBtn.disabled = true;
         trackSellEvent('sell_continue_to_checkout', { source: 'quantity_modal' });
-        const cart = addCurrentDeviceToCart() || getCart();
+        const cart = await addCurrentDeviceToCart();
         const progressEmail = normalizeEmail(currentUser?.email || getStoredEmail());
         if (isValidEmail(progressEmail)) {
             try {
@@ -1877,8 +1948,11 @@
         window.location.href = '/sell/checkout.html';
     };
     document.getElementById('addAnotherDeviceBtn').onclick = async () => {
+        const addAnotherBtn = document.getElementById('addAnotherDeviceBtn');
+        if (addAnotherBtn?.disabled) return;
+        if (addAnotherBtn) addAnotherBtn.disabled = true;
         trackSellEvent('sell_add_another_device');
-        const cart = addCurrentDeviceToCart() || getCart();
+        const cart = await addCurrentDeviceToCart();
         const progressEmail = normalizeEmail(currentUser?.email || getStoredEmail());
         if (isValidEmail(progressEmail)) {
             try {
@@ -1888,6 +1962,7 @@
             }
         }
         closeQuantityModal();
+        if (addAnotherBtn) addAnotherBtn.disabled = false;
         jumpToStep('brand');
     };
     document.getElementById('resetFlowBtn').onclick = (e) => { e.preventDefault(); window.location.href = '/sell/index.html'; };
