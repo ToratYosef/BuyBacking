@@ -491,6 +491,9 @@
   }
 
   function initShip48Banner() {
+    if (window.shcDisableShip48Banner === true) {
+      return;
+    }
     if (safeStorage.get(OFFER_DISMISS_KEY) === '1') {
       return;
     }
