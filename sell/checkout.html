@@ -1576,6 +1576,138 @@
             display: none !important;
         }
 
+
+
+        /* Final checkout stepper fixes: header always top, lighter submit panel, gentler type */
+        .checkout-intro {
+            display: grid !important;
+            position: relative !important;
+            z-index: 5 !important;
+            order: -10 !important;
+            margin-top: 0 !important;
+            margin-bottom: 4px !important;
+        }
+
+        .checkout-kicker,
+        .checkout-intro-kicker {
+            font-weight: 500 !important;
+            color: #64748b !important;
+            background: #fff !important;
+            border: 1px solid #e2e8f0 !important;
+        }
+
+        .checkout-intro h1,
+        .section-card h2,
+        .summary-title {
+            font-weight: 580 !important;
+        }
+
+        .checkout-intro p,
+        .section-description,
+        .shipping-section-copy,
+        .payout-section-copy,
+        .summary-submit-copy {
+            font-weight: 400 !important;
+        }
+
+        .checkout-mini-trust {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex-wrap: wrap !important;
+            gap: 8px !important;
+        }
+
+        .checkout-mini-trust span {
+            font-weight: 450 !important;
+            background: #fff !important;
+            border: 1px solid #e2e8f0 !important;
+            color: #475569 !important;
+        }
+
+        .checkout-flow-step {
+            font-weight: 520 !important;
+        }
+
+        .checkout-flow-step-number {
+            font-weight: 560 !important;
+        }
+
+        .shipping-option-title,
+        .option-label .font-bold,
+        .cart-item-name,
+        .cart-item-total,
+        .summary-total-value {
+            font-weight: 580 !important;
+        }
+
+        .summary-submit-block {
+            background: #ffffff !important;
+            color: #0f172a !important;
+            border: 1px solid #e2e8f0 !important;
+            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.05) !important;
+        }
+
+        .summary-submit-title {
+            color: #0f172a !important;
+            font-weight: 580 !important;
+        }
+
+        .summary-submit-copy {
+            color: #64748b !important;
+        }
+
+        #terms-container {
+            background: #f8fafc !important;
+            border: 1px solid #e2e8f0 !important;
+            color: #334155 !important;
+        }
+
+        #terms-container span {
+            color: #334155 !important;
+            font-weight: 400 !important;
+        }
+
+        #termsAndConditionsLink {
+            color: #0071e3 !important;
+            text-decoration-color: #0071e3 !important;
+        }
+
+        #terms { accent-color: #0071e3 !important; }
+
+        #submitOrderBtn {
+            background: #0071e3 !important;
+            color: #fff !important;
+            font-weight: 580 !important;
+        }
+
+        @media (max-width: 760px) {
+            .checkout-intro {
+                text-align: left !important;
+                justify-items: stretch !important;
+            }
+            .checkout-intro-copy {
+                max-width: none !important;
+                width: 100% !important;
+            }
+            .checkout-intro h1 {
+                font-size: 2rem !important;
+            }
+            .checkout-mini-trust {
+                display: grid !important;
+                grid-template-columns: 1fr !important;
+                width: 100% !important;
+                justify-content: stretch !important;
+            }
+            .checkout-mini-trust span {
+                width: 100% !important;
+                justify-content: flex-start !important;
+            }
+            .checkout-flow-nav {
+                width: 100% !important;
+            }
+        }
+
     </style>
     <link rel="stylesheet" href="/assets/css/site-chrome.css">
     <script type="module">
@@ -1944,6 +2076,85 @@
         { key: 'iphone', label: 'iPhone' },
         { key: 'samsung', label: 'Samsung' }
     ];
+    const FALLBACK_DEVICE_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+    const IMAGE_EXTENSIONS = ['.webp', '.png', '.jpg', '.jpeg'];
+    const firestoreModelImageCache = new Map();
+    const hasImageExtension = (url) => /\.(png|jpe?g|webp)(\?.*)?$/i.test(url || '');
+    const getCartItemModelDocIdCandidates = (item = {}) => {
+        const candidates = [];
+        [item.model, item.deviceSlug, item.modelSlug, item.id].forEach((value) => {
+            const normalized = String(value || '').trim();
+            if (normalized && !candidates.includes(normalized)) candidates.push(normalized);
+        });
+        const brand = normalizeBrandKey(item.brand || '');
+        const modelNameSlug = slugify(item.modelName || item.device || '');
+        if (modelNameSlug) {
+            const canonical = buildCanonicalDeviceSlug(brand, modelNameSlug);
+            [modelNameSlug, canonical].forEach((value) => {
+                if (value && !candidates.includes(value)) candidates.push(value);
+            });
+        }
+        return candidates;
+    };
+    const fetchFirestoreModelImageUrl = async (item = {}) => {
+        const brand = normalizeBrandKey(item.brand || '');
+        if (!brand) return '';
+
+        for (const modelId of getCartItemModelDocIdCandidates(item)) {
+            const cacheKey = `${brand}::${modelId}`;
+            if (firestoreModelImageCache.has(cacheKey)) return firestoreModelImageCache.get(cacheKey);
+            try {
+                const snap = await withPerf(`firestore:getCheckoutModelImage:${cacheKey}`, () => getDoc(doc(db, 'devices', brand, 'models', modelId)));
+                const imageUrl = String(snap.data()?.imageUrl || '').trim();
+                firestoreModelImageCache.set(cacheKey, imageUrl);
+                if (imageUrl) return imageUrl;
+            } catch (error) {
+                console.error('Failed fetching checkout model imageUrl:', error);
+                firestoreModelImageCache.set(cacheKey, '');
+            }
+        }
+        return '';
+    };
+    const hydrateCartItemImages = async () => {
+        if (!Array.isArray(cartItems) || !cartItems.length) return false;
+        let changed = false;
+        await Promise.all(cartItems.map(async (rawItem, index) => {
+            const item = normalizeCartItem(rawItem);
+            const firebaseImageUrl = await fetchFirestoreModelImageUrl(item);
+            if (firebaseImageUrl && item.imageUrl !== firebaseImageUrl) {
+                item.imageUrl = firebaseImageUrl;
+                item.imageSource = 'firestore';
+                cartItems[index] = item;
+                changed = true;
+            } else {
+                cartItems[index] = item;
+            }
+        }));
+        if (changed) saveCart(cartItems);
+        return changed;
+    };
+    const applyResolvedCartImageSources = (root = document) => {
+        root.querySelectorAll('img.cart-item-image[data-image-base]').forEach((img) => {
+            const baseUrl = String(img.dataset.imageBase || '').trim();
+            if (!baseUrl) {
+                img.src = FALLBACK_DEVICE_IMAGE;
+                return;
+            }
+            const candidates = hasImageExtension(baseUrl) ? [baseUrl] : IMAGE_EXTENSIONS.map((ext) => `${baseUrl}${ext}`);
+            let idx = 0;
+            const tryNext = () => {
+                if (idx >= candidates.length) {
+                    img.onerror = null;
+                    img.src = FALLBACK_DEVICE_IMAGE;
+                    return;
+                }
+                img.onerror = () => { idx += 1; tryNext(); };
+                img.onload = () => { img.onerror = null; };
+                img.src = candidates[idx];
+            };
+            tryNext();
+        });
+    };
     let cartItems = [];
     const zipInput = document.getElementById('zip');
     const submitOrderBtn = document.getElementById('submitOrderBtn');
@@ -2465,10 +2676,10 @@
             card.className = 'cart-item-card text-xs';
             const total = (item.unitPrice * item.qty).toFixed(2);
             const carrierDisplay = item.lock ? item.lock.charAt(0).toUpperCase() + item.lock.slice(1) : item.lock;
-            const imageUrl = item.imageUrl || item.image || item.thumbnail || '';
+            const imageUrl = item.imageUrl || '';
             card.innerHTML = `
                 <div class="cart-item-image-wrap">
-                    <img class="cart-item-image" src="${imageUrl || 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='}" alt="${item.modelName || 'Device'}" loading="lazy">
+                    <img class="cart-item-image" src="${FALLBACK_DEVICE_IMAGE}" data-image-base="${imageUrl}" alt="${item.modelName || 'Device'}" loading="lazy">
                 </div>
                 <div class="cart-item-body">
                     <div class="cart-item-top">
@@ -2495,6 +2706,7 @@
             `;
             cartContainer.appendChild(card);
         });
+        applyResolvedCartImageSources(cartContainer);
         updateSummary();
     };
     const applyCartChange = (index, action, value = null) => {
@@ -2654,7 +2866,12 @@
             el.classList.toggle('active', el.dataset.stepTarget === step);
             el.classList.toggle('done', buttonIndex < activeIndex);
         });
-        if (step === 'review') renderCart();
+        if (step === 'review') {
+            renderCart();
+            hydrateCartItemImages().then((changed) => {
+                if (changed && currentCheckoutStep === 'review') renderCart();
+            }).catch((error) => console.error('Failed hydrating checkout device images:', error));
+        }
         if (scroll) {
             document.querySelector('.checkout-intro')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
@@ -2798,6 +3015,12 @@
         }
 
         if (redirectToSellIfCartEmpty()) return;
+
+        try {
+            await hydrateCartItemImages();
+        } catch (error) {
+            console.error('Failed loading checkout device images from Firestore:', error);
+        }
 
         const currentCheckoutEmail = normalizeEmail(document.getElementById('email')?.value || fallbackEmail || '');
         if (isValidEmail(currentCheckoutEmail)) {
