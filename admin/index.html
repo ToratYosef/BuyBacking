@@ -990,7 +990,7 @@
       if (!order) return null;
       const requestedKeys = Array.isArray(targetDeviceKeys) && targetDeviceKeys.length
         ? targetDeviceKeys
-        : [getActiveDeviceKey(order) || buildOrderDeviceKey(order.id, 0)];
+        : getOrderDeviceEntries(order).map((entry) => buildOrderDeviceKey(order.id, entry.deviceIndex));
       const targetSet = new Set(requestedKeys);
       const entries = getOrderDeviceEntries(order);
       const payableDeviceKeys = [];
@@ -2470,6 +2470,67 @@
       return minStatus;
     }
     
+    async function updateMultipleDeviceStatusesInline(orderId, deviceKeys, newStatus) {
+      const uniqueDeviceKeys = Array.from(new Set((deviceKeys || []).filter(Boolean)));
+      if (!orderId || !uniqueDeviceKeys.length || !newStatus) return null;
+
+      const orderRef = doc(db, 'orders', orderId);
+      const order = state.allOrders.find((entry) => entry.id === orderId);
+      const previousOrderStatus = order?.status ?? null;
+      const previousDeviceStatusByKey = order ? { ...(order.deviceStatusByKey || {}) } : null;
+      const previousSelectedSnapshotStatus = state.selectedOrderSnapshot?.id === orderId
+        ? state.selectedOrderSnapshot?.status
+        : null;
+      const previousSelectedSnapshotDeviceStatusByKey = state.selectedOrderSnapshot?.id === orderId
+        ? { ...(state.selectedOrderSnapshot.deviceStatusByKey || {}) }
+        : null;
+
+      if (order) {
+        order.deviceStatusByKey = { ...(order.deviceStatusByKey || {}) };
+        uniqueDeviceKeys.forEach((deviceKey) => { order.deviceStatusByKey[deviceKey] = newStatus; });
+        order.status = computeOrderStatus(order);
+      }
+      if (state.selectedOrderSnapshot?.id === orderId) {
+        state.selectedOrderSnapshot.deviceStatusByKey = { ...(state.selectedOrderSnapshot.deviceStatusByKey || {}) };
+        uniqueDeviceKeys.forEach((deviceKey) => { state.selectedOrderSnapshot.deviceStatusByKey[deviceKey] = newStatus; });
+        state.selectedOrderSnapshot.status = computeOrderStatus(state.selectedOrderSnapshot);
+      }
+
+      const nextOrderStatus = order?.status || (state.selectedOrderSnapshot?.id === orderId ? state.selectedOrderSnapshot.status : null);
+      render();
+
+      const now = new Date();
+      const payload = { updatedAt: now };
+      uniqueDeviceKeys.forEach((deviceKey) => { payload[`deviceStatusByKey.${deviceKey}`] = newStatus; });
+      if (nextOrderStatus) payload.status = nextOrderStatus;
+      if (normalizeStatusKey(newStatus) === "completed") {
+        payload.completedAt = now;
+        payload.lastStatusUpdateAt = now;
+        if (payload.status === "completed") {
+          payload.activityLog = arrayUnion(buildAdminActivityLogEntry("Order changed status to completed.", "status", {
+            status: "completed",
+            source: "admin_payment_confirmation",
+            deviceKeys: uniqueDeviceKeys,
+          }));
+        }
+      }
+
+      try {
+        await withPerf(`firestore:updateOrderDevices:${orderId}`, () => updateDoc(orderRef, payload));
+        return { status: nextOrderStatus, deviceKeys: uniqueDeviceKeys };
+      } catch (error) {
+        if (order) {
+          order.deviceStatusByKey = previousDeviceStatusByKey || {};
+          if (previousOrderStatus !== null && previousOrderStatus !== undefined) order.status = previousOrderStatus;
+        }
+        if (state.selectedOrderSnapshot?.id === orderId) {
+          state.selectedOrderSnapshot.deviceStatusByKey = previousSelectedSnapshotDeviceStatusByKey || {};
+          if (previousSelectedSnapshotStatus !== null && previousSelectedSnapshotStatus !== undefined) state.selectedOrderSnapshot.status = previousSelectedSnapshotStatus;
+        }
+        render();
+        throw error;
+      }
+    }
     async function updateDeviceStatusInline(orderId, deviceKey, newStatus) {
       if (!orderId || !deviceKey || !newStatus) return;
       const orderRef = doc(db, 'orders', orderId);
@@ -9270,9 +9331,9 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
               return;
             }
             if (action === "payNow") {
-              const settlement = getOrderSettlementSummary(order, scopedDeviceKeys);
+              const settlement = getOrderSettlementSummary(order);
               const readyToPayFallback = normalizeStatusKey(focusedGroup.status || order?.status || '') === 'ready_to_pay'
-                ? buildReadyToPaySettlementFallback(order, scopedDeviceKeys)
+                ? buildReadyToPaySettlementFallback(order)
                 : null;
               const paymentSettlement = settlement.payableCount > 0 ? settlement : readyToPayFallback;
               if (!paymentSettlement?.payableCount) {
@@ -9904,9 +9965,7 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
               return;
             }
 
-            for (const key of keys) {
-              await updateDeviceStatusInline(order.id, key, "completed");
-            }
+            await updateMultipleDeviceStatusesInline(order.id, keys, "completed");
             const refreshedOrder = await withPerf(`firestore:getOrderAfterPayment:${order.id}`, () => getDoc(doc(db, 'orders', order.id)));
             if (refreshedOrder.exists()) {
               const latest = { id: refreshedOrder.id, ...refreshedOrder.data() };
