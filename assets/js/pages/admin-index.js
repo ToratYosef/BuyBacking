@@ -5935,9 +5935,80 @@ lastRendered = pageNumber;
 }
 }
 
+function getActivityDateCandidate(...values) {
+for (const value of values) {
+const date = coerceTimestampToDate(value);
+if (date) return date;
+}
+return null;
+}
+
+function getActivityTrackingNumber(order = {}) {
+return String(
+order.trackingNumber ||
+order.inboundTrackingNumber ||
+order.outboundTrackingNumber ||
+order.labelTrackingStatus?.trackingNumber ||
+order.labelTrackingStatus?.tracking_number ||
+order.kitTrackingStatus?.trackingNumber ||
+order.kitTrackingStatus?.tracking_number ||
+''
+).trim();
+}
+
+function formatActivityStatus(status) {
+return String(status || '')
+.replace(/[_-]+/g, ' ')
+.replace(/\b\w/g, char => char.toUpperCase())
+.trim();
+}
+
+function buildInferredActivityLogEntries(order = {}) {
+const entries = [];
+const push = (message, type, at, metadata = {}) => {
+const date = coerceTimestampToDate(at);
+if (!date || !message) return;
+entries.push({ message, type, at: date, metadata: { inferred: true, ...metadata } });
+};
+const createdAt = getActivityDateCandidate(order.createdAt, order.orderDate, order.submittedAt, order.createdAtMillis ? new Date(order.createdAtMillis) : null);
+const currentStatus = normalizeStatusKey(order.status);
+const statusDate = getActivityDateCandidate(order.lastStatusUpdateAt, order.statusUpdatedAt, order.updatedAt);
+push('Order submitted by customer.', 'order', createdAt, { status: order.status || 'pending_shipment' });
+if (currentStatus) push(`Current order status: ${formatActivityStatus(order.status)}.`, 'status', statusDate || createdAt, { status: order.status });
+push('Shipping label generated for customer.', 'label', order.labelGeneratedAt || order.latestLabelGeneratedAt || order.kitLabelGeneratedAt, { trackingNumber: getActivityTrackingNumber(order) });
+push('Shipping kit marked sent to customer.', 'shipping', order.kitSentAt || order.kitMailedAt || order.shippingKitSentAt, { status: 'kit_sent' });
+push('Shipping kit delivered to customer.', 'shipping', order.kitDeliveredAt || order.shippingKitDeliveredAt || order.kitTrackingStatus?.deliveredAt, { status: 'kit_delivered' });
+push('Customer device marked on the way.', 'shipping', order.phoneOnTheWayAt || order.deviceShippedAt || order.inboundTrackingAddedAt, { status: 'phone_on_the_way' });
+push('Customer device received.', 'status', order.receivedAt || order.deviceReceivedAt || (['received', 'imei_checked'].includes(currentStatus) ? statusDate : null), { status: 'received' });
+push('Order completed / paid.', 'payment', order.completedAt || order.paidAt || (currentStatus === 'completed' ? statusDate : null), { status: 'completed' });
+const emailType = formatActivityStatus(order.lastCustomerEmailType || order.lastConditionEmailReason || 'customer email');
+push(`Customer email sent: ${emailType}.`, 'email', order.lastCustomerEmailSentAt || order.lastConditionEmailSentAt, { emailType });
+const offer = order.reOffer || order.reoffer || null;
+push('Re-offer emailed to customer.', 'email', order.reOfferCreatedAt || offer?.createdAt || offer?.sentAt, { status: 're-offered-pending' });
+push('Re-offer accepted.', 'status', order.reOfferAcceptedAt || offer?.acceptedAt || (currentStatus === 're-offered-accepted' ? statusDate : null), { status: 're-offered-accepted' });
+push('Re-offer declined.', 'status', order.reOfferDeclinedAt || offer?.declinedAt || (currentStatus === 're-offered-declined' ? statusDate : null), { status: 're-offered-declined' });
+push('Tracking refreshed / synchronized.', 'tracking', order.lastTrackingRefreshAt || order.labelTrackingLastSyncedAt || order.kitTrackingLastRefreshedAt || order.labelTrackingStatus?.updatedAt || order.kitTrackingStatus?.updatedAt, { trackingNumber: getActivityTrackingNumber(order) });
+return entries;
+}
+
+function getCombinedActivityLogEntries(order = {}) {
+const explicit = Array.isArray(order?.activityLog) ? order.activityLog : [];
+const combined = [...explicit, ...buildInferredActivityLogEntries(order)];
+const seen = new Set();
+return combined.filter(entry => {
+const message = String(entry?.message || '').trim();
+if (!message) return false;
+const when = (coerceTimestampToDate(entry?.at || entry?.createdAt)?.getTime()) || 0;
+const key = `${String(entry?.type || '').toLowerCase()}|${message.toLowerCase()}|${when}`;
+if (seen.has(key)) return false;
+seen.add(key);
+return true;
+});
+}
+
 function renderActivityLog(order) {
 if (!modalActivityLog || !modalActivityLogList) return;
-const entries = Array.isArray(order?.activityLog) ? [...order.activityLog] : [];
+const entries = getCombinedActivityLogEntries(order);
 
 const filteredEntries = entries.filter((entry) => {
 const message = (entry?.message || '').toLowerCase();

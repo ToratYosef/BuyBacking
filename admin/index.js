@@ -62,14 +62,6 @@ function getMailTransporter() {
     return mailTransporter;
   }
 
-  if (!notificationEmail) {
-    console.warn(
-      "Void label notifications are disabled because NOTIFICATION_EMAIL_TO is not configured."
-    );
-    mailTransporter = null;
-    return mailTransporter;
-  }
-
   const {
     EMAIL_SERVICE,
     EMAIL_HOST,
@@ -91,7 +83,7 @@ function getMailTransporter() {
       transportConfig.secure = EMAIL_SECURE === "true";
     } else {
       console.warn(
-        "Void label notifications are disabled because neither EMAIL_SERVICE nor EMAIL_HOST is configured."
+        "Email notifications are disabled because neither EMAIL_SERVICE nor EMAIL_HOST is configured."
       );
       mailTransporter = null;
       return mailTransporter;
@@ -159,6 +151,179 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+
+function getOrderCustomerEmail(order = {}) {
+  return (
+    order?.shippingInfo?.email ||
+    order?.customerEmail ||
+    order?.email ||
+    order?.contact?.email ||
+    order?.customer?.email ||
+    ""
+  )
+    .toString()
+    .trim();
+}
+
+function getOrderCustomerName(order = {}) {
+  return (
+    order?.shippingInfo?.fullName ||
+    order?.shippingInfo?.name ||
+    order?.customerName ||
+    order?.name ||
+    order?.customer?.name ||
+    ""
+  )
+    .toString()
+    .trim();
+}
+
+function formatCurrency(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return null;
+  return amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
+
+function getOrderPayoutDisplay(order = {}) {
+  return (
+    formatCurrency(order.finalPayoutAmount) ||
+    formatCurrency(order.totalPayout) ||
+    formatCurrency(order.totalOffer) ||
+    formatCurrency(order.offerAmount) ||
+    formatCurrency(order.price) ||
+    null
+  );
+}
+
+function buildActivityLogEntry(message, type = "status", metadata = {}) {
+  return {
+    type,
+    message,
+    metadata: metadata && typeof metadata === "object" ? metadata : {},
+    at: new Date(),
+  };
+}
+
+function buildStatusEmail(status, order) {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  const customerName = getOrderCustomerName(order);
+  const greetingName = getGreetingName(customerName);
+  const orderId = order?.id || "your order";
+  const payout = getOrderPayoutDisplay(order);
+
+  const templates = {
+    received: {
+      subject: `We received your device for order #${orderId}`,
+      headline: "Your device has been received",
+      paragraphs: [
+        `Good news — we received your device for order #${orderId}.`,
+        "Our team will inspect it and complete the remaining checks as quickly as possible.",
+        "If anything does not match the original quote, we will email you before moving forward. Otherwise, we will continue toward payout."
+      ],
+    },
+    completed: {
+      subject: `Order #${orderId} is complete`,
+      headline: "Your order is complete",
+      paragraphs: [
+        `Order #${orderId} has been completed${payout ? ` for ${payout}` : ""}.`,
+        "Your payout has been processed or marked ready according to the payment details on the order.",
+        "Thank you for selling your device to SecondHandCell."
+      ],
+    },
+    "re-offered-accepted": {
+      subject: `Re-offer accepted for order #${orderId}`,
+      headline: "Your re-offer has been accepted",
+      paragraphs: [
+        `The re-offer for order #${orderId} has been accepted${payout ? ` at ${payout}` : ""}.`,
+        "We will continue processing the payout using the updated offer details.",
+      ],
+    },
+    "re-offered-auto-accepted": {
+      subject: `Re-offer accepted for order #${orderId}`,
+      headline: "Your re-offer has been accepted",
+      paragraphs: [
+        `The pending re-offer for order #${orderId} has been accepted according to the re-offer terms${payout ? ` at ${payout}` : ""}.`,
+        "We will continue processing the payout using the updated offer details.",
+      ],
+    },
+  };
+
+  const template = templates[normalizedStatus];
+  if (!template) return null;
+
+  const paragraphHtml = template.paragraphs
+    .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+    .join("\n");
+  const html = `
+    <p>Hi ${escapeHtml(greetingName)},</p>
+    <h2>${escapeHtml(template.headline)}</h2>
+    ${paragraphHtml}
+    <p>If you have any questions, reply to this email and we’ll be happy to help.</p>
+    <p>Thank you,<br/>SecondHandCell Team</p>
+  `;
+  const text = [
+    `Hi ${greetingName},`,
+    "",
+    template.headline,
+    "",
+    ...template.paragraphs,
+    "",
+    "If you have any questions, reply to this email and we'll be happy to help.",
+    "",
+    "Thank you,",
+    "SecondHandCell Team",
+  ].join("\n");
+
+  return { subject: template.subject, html, text, type: `status_${normalizedStatus.replace(/[^a-z0-9]+/g, "_")}` };
+}
+
+async function sendCustomerEmail(orderRef, order, email) {
+  const customerEmail = getOrderCustomerEmail(order);
+  if (!customerEmail) {
+    throw new Error("The order does not have a customer email address.");
+  }
+
+  const transporter = getMailTransporter();
+  if (!transporter) {
+    throw new Error("Email service is not configured.");
+  }
+
+  const mailOptions = {
+    from: emailFromAddress,
+    to: customerEmail,
+    subject: email.subject,
+    html: email.html,
+    text: email.text,
+  };
+
+  if (notificationEmail) {
+    mailOptions.bcc = notificationEmail;
+  }
+
+  await transporter.sendMail(mailOptions);
+
+  const updatePayload = {
+    lastCustomerEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastCustomerEmailType: email.type || null,
+    activityLog: admin.firestore.FieldValue.arrayUnion(
+      buildActivityLogEntry(`Sent ${email.subject} to customer.`, "email", {
+        subject: email.subject,
+        type: email.type || null,
+      })
+    ),
+  };
+
+  await orderRef.set(updatePayload, { merge: true });
+
+  if (order.userId) {
+    await usersCollection
+      .doc(order.userId)
+      .collection("orders")
+      .doc(order.id)
+      .set(updatePayload, { merge: true });
+  }
 }
 
 function getGreetingName(fullName) {
@@ -734,6 +899,24 @@ async function processLabelVoid(order, labelRequests, triggerSource = "manual") 
     updates.latestLabelGeneratedAt = admin.firestore.FieldValue.delete();
   }
 
+  if (results.length) {
+    const approvedCount = results.filter((result) => result.approved).length;
+    const failedCount = results.filter((result) => result.error || !result.approved).length;
+    updates.activityLog = admin.firestore.FieldValue.arrayUnion(
+      buildActivityLogEntry("Shipping label void request processed.", "label", {
+        triggerSource,
+        approvedCount,
+        failedCount,
+        labels: results.map((result) => ({
+          key: result.key,
+          labelId: result.labelId || null,
+          approved: Boolean(result.approved),
+          message: result.message || result.error || null,
+        })),
+      })
+    );
+  }
+
   if (Object.keys(updates).length) {
     await orderRef.update(updates);
   }
@@ -848,6 +1031,10 @@ app.post("/api/submit-order", async (req, res) => {
       recaptchaVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       status: "pending_shipment",
+      activityLog: [buildActivityLogEntry("Order submitted by customer.", "order", {
+        status: "pending_shipment",
+        source: "checkout",
+      })],
     });
     console.log(`Order ${docRef.id} successfully added to Firestore.`);
     // Respond to the client with a success message
@@ -962,6 +1149,13 @@ app.post("/api/generate-label/:id", async (req, res) => {
         labelVoidMessage: null,
         labelGeneratedAt: serverTimestamp,
         latestLabelGeneratedAt: serverTimestamp,
+        activityLog: admin.firestore.FieldValue.arrayUnion(
+          buildActivityLogEntry("Shipping label generated and emailed/available to customer.", "label", {
+            status: "label_generated",
+            trackingNumber: labelData.tracking_number || null,
+            labelId: labelData.label_id || null,
+          })
+        ),
         shipEngineLabels: {
           ...existingLabels,
           primary: primaryLabel,
@@ -1034,8 +1228,46 @@ app.put("/api/orders/:id/status", async (req, res) => {
     const doc = await orderRef.get();
     if (!doc.exists) return res.status(404).json({ error: "Order not found" });
 
-    await orderRef.update({ status });
-    res.json({ message: `Order marked as ${status}` });
+    const normalizedStatus = String(status).trim().toLowerCase();
+    const updatePayload = {
+      status,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastStatusUpdateAt: admin.firestore.FieldValue.serverTimestamp(),
+      activityLog: admin.firestore.FieldValue.arrayUnion(
+        buildActivityLogEntry(`Order changed status to ${status}.`, "status", {
+          status,
+          source: "admin_status_update",
+        })
+      ),
+    };
+
+    if (normalizedStatus === "completed") {
+      updatePayload.completedAt = admin.firestore.FieldValue.serverTimestamp();
+    }
+
+    await orderRef.set(updatePayload, { merge: true });
+
+    const order = { id: doc.id, ...doc.data() };
+    if (order.userId) {
+      await usersCollection
+        .doc(order.userId)
+        .collection("orders")
+        .doc(order.id)
+        .set(updatePayload, { merge: true });
+    }
+
+    const updatedOrder = { ...order, ...updatePayload, status };
+    const shouldNotifyCustomer = req.body?.notifyCustomer !== false;
+    const statusEmail = shouldNotifyCustomer ? buildStatusEmail(status, updatedOrder) : null;
+
+    if (statusEmail) {
+      await sendCustomerEmail(orderRef, updatedOrder, statusEmail);
+    }
+
+    res.json({
+      message: `Order marked as ${status}${statusEmail ? " and customer emailed" : ""}`,
+      emailSent: Boolean(statusEmail),
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to update order status" });
@@ -1056,7 +1288,7 @@ app.post("/api/orders/:id/send-condition-email", async (req, res) => {
     }
 
     const order = { id: doc.id, ...doc.data() };
-    const customerEmail = order?.shippingInfo?.email;
+    const customerEmail = getOrderCustomerEmail(order);
     if (!customerEmail) {
       return res
         .status(400)
@@ -1094,7 +1326,7 @@ app.post("/api/orders/:id/send-condition-email", async (req, res) => {
         label: labelText || null,
         notes: notes?.trim() || null,
       },
-      at: admin.firestore.FieldValue.serverTimestamp(),
+      at: new Date(),
     };
 
     const updatePayload = {
