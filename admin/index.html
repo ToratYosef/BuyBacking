@@ -990,7 +990,7 @@
       if (!order) return null;
       const requestedKeys = Array.isArray(targetDeviceKeys) && targetDeviceKeys.length
         ? targetDeviceKeys
-        : [getActiveDeviceKey(order) || buildOrderDeviceKey(order.id, 0)];
+        : getOrderDeviceEntries(order).map((entry) => buildOrderDeviceKey(order.id, entry.deviceIndex));
       const targetSet = new Set(requestedKeys);
       const entries = getOrderDeviceEntries(order);
       const payableDeviceKeys = [];
@@ -1648,6 +1648,10 @@
       shippingLabelSubmitting: false,
       shippingLabelPreviewUrl: "",
       shippingLabelTrackingNumber: "",
+      shippingLabelRates: [],
+      shippingLabelSelectedRateId: "",
+      shippingLabelRatesLoading: false,
+      shippingLabelRatesError: "",
       customerEmailEditOpen: false,
       customerEmailDraft: "",
       customerEmailSaving: false,
@@ -1820,6 +1824,10 @@
       state.shippingLabelSubmitting = false;
       state.shippingLabelPreviewUrl = "";
       state.shippingLabelTrackingNumber = "";
+      state.shippingLabelRates = [];
+      state.shippingLabelSelectedRateId = "";
+      state.shippingLabelRatesLoading = false;
+      state.shippingLabelRatesError = "";
       prefillShippingLabelForm(null);
       state.shippingLabelModalOpen = true;
       scheduleRender();
@@ -1857,6 +1865,10 @@
       state.shippingLabelSubmitting = false;
       state.shippingLabelPreviewUrl = "";
       state.shippingLabelTrackingNumber = "";
+      state.shippingLabelRates = [];
+      state.shippingLabelSelectedRateId = "";
+      state.shippingLabelRatesLoading = false;
+      state.shippingLabelRatesError = "";
       if (hasTransientOverlayOpen()) {
         state.pendingOrdersRenderWhileOverlay = true;
       } else {
@@ -1866,6 +1878,95 @@
       writeAdminUiCache();
     }
 
+    function buildManualShippingLabelPayload() {
+      const form = state.shippingLabelForm || {};
+      return {
+        direction: state.shippingLabelModalDirection,
+        customerAddress: {
+          fullName: String(form.fullName || "").trim(),
+          streetAddress: String(form.streetAddress || "").trim(),
+          city: String(form.city || "").trim(),
+          state: String(form.state || "").trim().toUpperCase(),
+          zipCode: String(form.zipCode || "").trim(),
+        },
+        containsHazardousMaterials: false,
+      };
+    }
+
+    function getManualShippingRateId(rate = {}) {
+      return String(rate.rateId || rate.rate_id || rate.id || rate.shipEngineRateId || "").trim();
+    }
+
+    function getManualShippingRateAmount(rate = {}) {
+      const amount = rate.shippingAmount?.amount ?? rate.shipping_amount?.amount ?? rate.amount ?? rate.totalAmount ?? rate.total_amount;
+      const n = Number(amount);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function formatManualShippingRate(rate = {}) {
+      const carrier = rate.carrierFriendlyName || rate.carrier_friendly_name || rate.carrierName || rate.carrier_code || "Carrier";
+      const service = rate.serviceType || rate.service_type || rate.serviceCode || rate.service_code || rate.packageType || "Service";
+      const amount = getManualShippingRateAmount(rate);
+      const delivery = rate.estimatedDeliveryDate || rate.estimated_delivery_date || rate.deliveryDays || rate.delivery_days || "";
+      return `${carrier} • ${service}${amount !== null ? ` • $${amount.toFixed(2)}` : ""}${delivery ? ` • ${delivery}` : ""}`;
+    }
+
+    function extractManualShippingRates(result = {}) {
+      if (Array.isArray(result)) return result;
+      if (Array.isArray(result.rates)) return result.rates;
+      if (Array.isArray(result.rateResponse?.rates)) return result.rateResponse.rates;
+      if (Array.isArray(result.rate_response?.rates)) return result.rate_response.rates;
+      return [];
+    }
+
+    async function fetchManualShippingRates() {
+      const form = state.shippingLabelForm || {};
+      if (!form.fullName || !form.streetAddress || !form.city || !form.state || !form.zipCode) {
+        toast("Please fill all customer address fields before checking rates.", "error");
+        return;
+      }
+
+      state.shippingLabelRatesLoading = true;
+      state.shippingLabelRatesError = "";
+      state.shippingLabelRates = [];
+      state.shippingLabelSelectedRateId = "";
+      render();
+
+      try {
+        const payload = buildManualShippingLabelPayload();
+        const rateEndpoints = [`/manual-shipping-label/rates`, `/manual-shipping-rates`, `/manual-shipping-label/rate-check`];
+        let result = null;
+        let lastRateError = null;
+        for (const endpoint of rateEndpoints) {
+          try {
+            result = await apiPost(endpoint, payload);
+            lastRateError = null;
+            break;
+          } catch (rateError) {
+            lastRateError = rateError;
+            if (Number(rateError?.status || 0) !== 404) break;
+          }
+        }
+        if (lastRateError) throw lastRateError;
+        const rates = extractManualShippingRates(result).filter((rate) => getManualShippingRateId(rate));
+        state.shippingLabelRates = rates;
+        state.shippingLabelSelectedRateId = getManualShippingRateId(rates[0] || {});
+        state.shippingLabelRatesLoading = false;
+        if (!rates.length) {
+          state.shippingLabelRatesError = "No ShipEngine rates were returned for this address.";
+          toast(state.shippingLabelRatesError, "error");
+        } else {
+          toast(`Found ${rates.length} ShipEngine rate${rates.length === 1 ? "" : "s"}.`, "success");
+        }
+        render();
+      } catch (error) {
+        state.shippingLabelRatesLoading = false;
+        state.shippingLabelRatesError = error?.message || "Failed to fetch ShipEngine rates.";
+        render();
+        toast(state.shippingLabelRatesError, "error");
+      }
+    }
+
     async function submitManualShippingLabel() {
       if (state.shippingLabelSubmitting) return;
       const form = state.shippingLabelForm || {};
@@ -1873,19 +1974,23 @@
         toast("Please fill all customer address fields.", "error");
         return;
       }
+      const selectedRateId = String(state.shippingLabelSelectedRateId || "").trim();
+      if (!selectedRateId) {
+        toast("Select a ShipEngine rate before generating the label.", "error");
+        return;
+      }
 
       state.shippingLabelSubmitting = true;
       render();
       try {
+        const selectedRate = (state.shippingLabelRates || []).find((rate) => getManualShippingRateId(rate) === selectedRateId) || null;
         const payload = {
-          direction: state.shippingLabelModalDirection,
-          customerAddress: {
-            fullName: String(form.fullName || "").trim(),
-            streetAddress: String(form.streetAddress || "").trim(),
-            city: String(form.city || "").trim(),
-            state: String(form.state || "").trim().toUpperCase(),
-            zipCode: String(form.zipCode || "").trim(),
-          },
+          ...buildManualShippingLabelPayload(),
+          rateId: selectedRateId,
+          rate_id: selectedRateId,
+          selectedRateId,
+          shipEngineRateId: selectedRateId,
+          selectedRate,
         };
         const result = await apiPost(`/manual-shipping-label`, payload);
         toast(`Label generated${result?.trackingNumber ? `: ${result.trackingNumber}` : ""}`, "success");
@@ -2467,6 +2572,67 @@
       return minStatus;
     }
     
+    async function updateMultipleDeviceStatusesInline(orderId, deviceKeys, newStatus) {
+      const uniqueDeviceKeys = Array.from(new Set((deviceKeys || []).filter(Boolean)));
+      if (!orderId || !uniqueDeviceKeys.length || !newStatus) return null;
+
+      const orderRef = doc(db, 'orders', orderId);
+      const order = state.allOrders.find((entry) => entry.id === orderId);
+      const previousOrderStatus = order?.status ?? null;
+      const previousDeviceStatusByKey = order ? { ...(order.deviceStatusByKey || {}) } : null;
+      const previousSelectedSnapshotStatus = state.selectedOrderSnapshot?.id === orderId
+        ? state.selectedOrderSnapshot?.status
+        : null;
+      const previousSelectedSnapshotDeviceStatusByKey = state.selectedOrderSnapshot?.id === orderId
+        ? { ...(state.selectedOrderSnapshot.deviceStatusByKey || {}) }
+        : null;
+
+      if (order) {
+        order.deviceStatusByKey = { ...(order.deviceStatusByKey || {}) };
+        uniqueDeviceKeys.forEach((deviceKey) => { order.deviceStatusByKey[deviceKey] = newStatus; });
+        order.status = computeOrderStatus(order);
+      }
+      if (state.selectedOrderSnapshot?.id === orderId) {
+        state.selectedOrderSnapshot.deviceStatusByKey = { ...(state.selectedOrderSnapshot.deviceStatusByKey || {}) };
+        uniqueDeviceKeys.forEach((deviceKey) => { state.selectedOrderSnapshot.deviceStatusByKey[deviceKey] = newStatus; });
+        state.selectedOrderSnapshot.status = computeOrderStatus(state.selectedOrderSnapshot);
+      }
+
+      const nextOrderStatus = order?.status || (state.selectedOrderSnapshot?.id === orderId ? state.selectedOrderSnapshot.status : null);
+      render();
+
+      const now = new Date();
+      const payload = { updatedAt: now };
+      uniqueDeviceKeys.forEach((deviceKey) => { payload[`deviceStatusByKey.${deviceKey}`] = newStatus; });
+      if (nextOrderStatus) payload.status = nextOrderStatus;
+      if (normalizeStatusKey(newStatus) === "completed") {
+        payload.completedAt = now;
+        payload.lastStatusUpdateAt = now;
+        if (payload.status === "completed") {
+          payload.activityLog = arrayUnion(buildAdminActivityLogEntry("Order changed status to completed.", "status", {
+            status: "completed",
+            source: "admin_payment_confirmation",
+            deviceKeys: uniqueDeviceKeys,
+          }));
+        }
+      }
+
+      try {
+        await withPerf(`firestore:updateOrderDevices:${orderId}`, () => updateDoc(orderRef, payload));
+        return { status: nextOrderStatus, deviceKeys: uniqueDeviceKeys };
+      } catch (error) {
+        if (order) {
+          order.deviceStatusByKey = previousDeviceStatusByKey || {};
+          if (previousOrderStatus !== null && previousOrderStatus !== undefined) order.status = previousOrderStatus;
+        }
+        if (state.selectedOrderSnapshot?.id === orderId) {
+          state.selectedOrderSnapshot.deviceStatusByKey = previousSelectedSnapshotDeviceStatusByKey || {};
+          if (previousSelectedSnapshotStatus !== null && previousSelectedSnapshotStatus !== undefined) state.selectedOrderSnapshot.status = previousSelectedSnapshotStatus;
+        }
+        render();
+        throw error;
+      }
+    }
     async function updateDeviceStatusInline(orderId, deviceKey, newStatus) {
       if (!orderId || !deviceKey || !newStatus) return;
       const orderRef = doc(db, 'orders', orderId);
@@ -7489,6 +7655,27 @@
                   <input id="shippingLabelZip" type="text" value="${esc(form.zipCode || "")}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="11230" />
                 </div>
               </div>
+              <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p class="text-sm font-bold text-slate-900">ShipEngine rate checker</p>
+                    <p class="text-xs text-slate-500">Check rates first, then choose the exact rate to buy the manual label.</p>
+                  </div>
+                  <button id="shippingLabelCheckRatesBtn" type="button" class="px-4 py-2 rounded-lg text-sm font-semibold ${state.shippingLabelRatesLoading ? "bg-slate-300 text-slate-600 cursor-not-allowed" : "bg-emerald-600 text-white hover:bg-emerald-700"}" ${state.shippingLabelRatesLoading ? "disabled" : ""}>${state.shippingLabelRatesLoading ? "Checking…" : "Check Rates"}</button>
+                </div>
+                ${state.shippingLabelRatesError ? `<div class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">${esc(state.shippingLabelRatesError)}</div>` : ""}
+                ${(state.shippingLabelRates || []).length ? `
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Selected ShipEngine rate</label>
+                    <select id="shippingLabelRateSelect" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                      ${(state.shippingLabelRates || []).map((rate) => {
+                        const id = getManualShippingRateId(rate);
+                        return `<option value="${esc(id)}" ${id === state.shippingLabelSelectedRateId ? "selected" : ""}>${esc(formatManualShippingRate(rate))}</option>`;
+                      }).join("")}
+                    </select>
+                  </div>
+                ` : `<p class="text-xs text-slate-500">No rate selected yet.</p>`}
+              </div>
               ${previewUrl ? `
                 <div class="rounded-xl border border-slate-200 overflow-hidden bg-slate-50">
                   <div class="px-4 py-2 text-xs font-semibold text-slate-600 border-b border-slate-200 bg-white">PDF Preview ${trackingNumber ? `• Tracking: ${esc(trackingNumber)}` : ""}</div>
@@ -9260,9 +9447,9 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
               return;
             }
             if (action === "payNow") {
-              const settlement = getOrderSettlementSummary(order, scopedDeviceKeys);
+              const settlement = getOrderSettlementSummary(order);
               const readyToPayFallback = normalizeStatusKey(focusedGroup.status || order?.status || '') === 'ready_to_pay'
-                ? buildReadyToPaySettlementFallback(order, scopedDeviceKeys)
+                ? buildReadyToPaySettlementFallback(order)
                 : null;
               const paymentSettlement = settlement.payableCount > 0 ? settlement : readyToPayFallback;
               if (!paymentSettlement?.payableCount) {
@@ -9373,6 +9560,8 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
         const customerToMeBtn = document.getElementById("shippingDirectionCustomerToMe");
         const meToCustomerBtn = document.getElementById("shippingDirectionMeToCustomer");
         const generateBtn = document.getElementById("shippingLabelModalGenerateBtn");
+        const checkRatesBtn = document.getElementById("shippingLabelCheckRatesBtn");
+        const rateSelect = document.getElementById("shippingLabelRateSelect");
         const fullName = document.getElementById("shippingLabelFullName");
         const street = document.getElementById("shippingLabelStreet");
         const city = document.getElementById("shippingLabelCity");
@@ -9381,6 +9570,9 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
 
         const syncField = (key, value) => {
           state.shippingLabelForm[key] = String(value || "");
+          state.shippingLabelRates = [];
+          state.shippingLabelSelectedRateId = "";
+          state.shippingLabelRatesError = "";
         };
 
         if (fullName) fullName.addEventListener("input", (event) => syncField("fullName", event.target.value));
@@ -9407,6 +9599,16 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
         if (overlay) {
           overlay.addEventListener("click", (event) => {
             if (event.target === overlay) closeShippingLabelModal();
+          });
+        }
+        if (checkRatesBtn) {
+          checkRatesBtn.addEventListener("click", async () => {
+            await fetchManualShippingRates();
+          });
+        }
+        if (rateSelect) {
+          rateSelect.addEventListener("change", (event) => {
+            state.shippingLabelSelectedRateId = String(event.target.value || "");
           });
         }
         if (generateBtn) {
@@ -9888,9 +10090,7 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
               return;
             }
 
-            for (const key of keys) {
-              await updateDeviceStatusInline(order.id, key, "completed");
-            }
+            await updateMultipleDeviceStatusesInline(order.id, keys, "completed");
             const refreshedOrder = await withPerf(`firestore:getOrderAfterPayment:${order.id}`, () => getDoc(doc(db, 'orders', order.id)));
             if (refreshedOrder.exists()) {
               const latest = { id: refreshedOrder.id, ...refreshedOrder.data() };
