@@ -149,9 +149,6 @@ const SHIPPING_STATUS_KEYS = new Set([
 
 const STATUS_BUTTON_BASE_CLASSES = 'inline-flex items-center gap-2 font-semibold text-xs px-3 py-1 rounded-full border border-transparent shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-400';
 
-const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
-const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png";
-
 const escapeHtml = (value) => {
   if (value === null || value === undefined) {
     return "";
@@ -428,10 +425,6 @@ const ordersStatusCanvas = document.getElementById('orders-status-chart');
 const statusBreakdownList = document.getElementById('status-breakdown-list');
 const statusBreakdownItems = statusBreakdownList ? Array.from(statusBreakdownList.querySelectorAll('.status-breakdown-item')) : [];
 const agingWatchlist = document.getElementById('aging-watchlist');
-const trustpilotHighlightLink = document.getElementById('trustpilot-highlight-link');
-const trustpilotHighlightImage = document.getElementById('trustpilot-highlight-image');
-const trustpilotFooterLink = document.getElementById('trustpilot-footer-link');
-const trustpilotFooterImage = document.getElementById('trustpilot-footer-image');
 const adminFooterYear = document.getElementById('admin-footer-year');
 
 let currentSearchTerm = '';
@@ -442,20 +435,6 @@ currentSearchTerm = mobileSearchInput.value;
 }
 syncSearchInputs(currentSearchTerm);
 
-if (trustpilotHighlightLink) {
-trustpilotHighlightLink.href = TRUSTPILOT_REVIEW_LINK;
-}
-if (trustpilotHighlightImage) {
-trustpilotHighlightImage.src = TRUSTPILOT_STARS_IMAGE_URL;
-trustpilotHighlightImage.alt = 'See our Trustpilot reviews';
-}
-if (trustpilotFooterLink) {
-trustpilotFooterLink.href = TRUSTPILOT_REVIEW_LINK;
-}
-if (trustpilotFooterImage) {
-trustpilotFooterImage.src = TRUSTPILOT_STARS_IMAGE_URL;
-trustpilotFooterImage.alt = 'Trustpilot 5 star rating';
-}
 if (adminFooterYear) {
 adminFooterYear.textContent = new Date().getFullYear();
 }

@@ -82,7 +82,7 @@ if (!window[INIT_FLAG]) {
             <li>Secure handling, certified data wiping, and legal compliance checks.</li>
             <li>Real customer feedback and support at <a href="mailto:sales@secondhandcell.com">sales@secondhandcell.com</a>.</li>
           </ul>
-          <p>See full customer reviews on our Trust page and Trustpilot profile.</p>
+          <p>See what customers say about us through our official customer review channels.</p>
         `,
       },
       {

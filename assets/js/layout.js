@@ -339,7 +339,11 @@
             <li><a href="/unsubscribe/">Unsubscribe</a></li>
           </ul>
           <div class="mx-auto mt-10 max-w-sm">
-            <div class="trustpilot-widget" data-locale="en-US" data-template-id="56278e9abfbbba0bdcd568bc" data-businessunit-id="68c8cb56da935f8a761f99a9" data-style-height="52px" data-style-width="100%" data-token="5b88bae4-1400-45d0-81d4-480b85d61b76"><a href="https://www.trustpilot.com/review/secondhandcell.com" target="_blank" rel="noopener">Trustpilot</a></div>
+            <!-- TrustBox widget - Review Collector -->
+<div class="trustpilot-widget" data-locale="en-US" data-template-id="56278e9abfbbba0bdcd568bc" data-businessunit-id="68c8cb56da935f8a761f99a9" data-style-height="52px" data-style-width="100%" data-token="d5091e3c-702b-4ac0-9508-ca0b305f6f21">
+  <a href="https://www.trustpilot.com/review/secondhandcell.com" target="_blank" rel="noopener">Trustpilot</a>
+</div>
+<!-- End TrustBox widget -->
           </div>
         </div>
       </div>
