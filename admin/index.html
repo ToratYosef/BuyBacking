@@ -364,6 +364,74 @@
         at: new Date(),
       };
     }
+    function getFirstDateCandidate(...values) {
+      for (const value of values) {
+        const date = toDateAny(value);
+        if (date) return date;
+      }
+      return null;
+    }
+    function readableStatusLabel(status) {
+      return String(status || '')
+        .replace(/[_-]+/g, ' ')
+        .replace(/\b\w/g, (char) => char.toUpperCase())
+        .trim();
+    }
+    function buildInferredActivityLog(order = {}) {
+      const inferred = [];
+      const push = (message, type, at, metadata = {}) => {
+        const date = toDateAny(at);
+        if (!date || !message) return;
+        inferred.push({ message, type, at: date, metadata: { inferred: true, ...metadata } });
+      };
+
+      const createdAt = getFirstDateCandidate(order.createdAt, order.orderDate, order.submittedAt, order.createdAtMillis ? new Date(order.createdAtMillis) : null);
+      push('Order submitted by customer.', 'order', createdAt, { status: order.status || 'pending_shipment' });
+
+      const currentStatus = normalizeStatusKey(order.status);
+      const statusDate = getFirstDateCandidate(order.lastStatusUpdateAt, order.statusUpdatedAt, order.updatedAt);
+      if (currentStatus) {
+        push(`Current order status: ${readableStatusLabel(order.status)}.`, 'status', statusDate || createdAt, { status: order.status });
+      }
+
+      push('Shipping label generated for customer.', 'label', order.labelGeneratedAt || order.latestLabelGeneratedAt || order.kitLabelGeneratedAt, { trackingNumber: getAnyTrackingNumber(order) || '' });
+      push('Shipping kit marked sent to customer.', 'shipping', order.kitSentAt || order.kitMailedAt || order.shippingKitSentAt, { status: 'kit_sent' });
+      push('Shipping kit delivered to customer.', 'shipping', order.kitDeliveredAt || order.shippingKitDeliveredAt || order.kitTrackingStatus?.deliveredAt, { status: 'kit_delivered' });
+      push('Customer device marked on the way.', 'shipping', order.phoneOnTheWayAt || order.deviceShippedAt || order.inboundTrackingAddedAt, { status: 'phone_on_the_way' });
+      push('Customer device received.', 'status', order.receivedAt || order.deviceReceivedAt || (['received', 'imei_checked'].includes(currentStatus) ? statusDate : null), { status: 'received' });
+      push('Order completed / paid.', 'payment', order.completedAt || order.paidAt || (currentStatus === 'completed' ? statusDate : null), { status: 'completed' });
+
+      const lastEmailType = readableStatusLabel(order.lastCustomerEmailType || order.lastConditionEmailReason || 'customer email');
+      push(`Customer email sent: ${lastEmailType}.`, 'email', order.lastCustomerEmailSentAt || order.lastConditionEmailSentAt, { emailType: order.lastCustomerEmailType || order.lastConditionEmailReason || '' });
+
+      const offer = order.reOffer || order.reoffer || null;
+      push('Re-offer emailed to customer.', 'email', order.reOfferCreatedAt || offer?.createdAt || offer?.sentAt, { status: 're-offered-pending' });
+      push('Re-offer accepted.', 'status', order.reOfferAcceptedAt || offer?.acceptedAt || (currentStatus === 're-offered-accepted' ? statusDate : null), { status: 're-offered-accepted' });
+      push('Re-offer declined.', 'status', order.reOfferDeclinedAt || offer?.declinedAt || (currentStatus === 're-offered-declined' ? statusDate : null), { status: 're-offered-declined' });
+
+      const trackingRefreshedAt = getFirstDateCandidate(order.lastTrackingRefreshAt, order.labelTrackingLastSyncedAt, order.kitTrackingLastRefreshedAt, order.labelTrackingStatus?.updatedAt, order.kitTrackingStatus?.updatedAt);
+      push('Tracking refreshed / synchronized.', 'tracking', trackingRefreshedAt, { trackingNumber: getAnyTrackingNumber(order) || '' });
+
+      return inferred;
+    }
+    function getOrderActivityLog(order = {}) {
+      const explicit = Array.isArray(order.activityLog) ? order.activityLog : [];
+      const combined = [...explicit, ...buildInferredActivityLog(order)];
+      const seen = new Set();
+      return combined.filter((entry) => {
+        const message = String(entry?.message || '').trim();
+        if (!message) return false;
+        const when = toDateAny(entry?.at || entry?.createdAt)?.getTime() || 0;
+        const key = `${String(entry?.type || '').toLowerCase()}|${message.toLowerCase()}|${when}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).sort((a, b) => {
+        const aTime = toDateAny(a?.at || a?.createdAt)?.getTime() || 0;
+        const bTime = toDateAny(b?.at || b?.createdAt)?.getTime() || 0;
+        return bTime - aTime;
+      });
+    }
     function getStatusSortTimestamp(order, deviceKey, status) {
       const normalized = normalizeStatusKey(status);
       const issueEntries = deviceKey ? getDeviceIssueEntries(order, deviceKey) : [];
@@ -6656,7 +6724,7 @@
         `;
       }
       function logsHTML() {
-        const logs = Array.isArray(order.activityLog) ? order.activityLog.slice().reverse() : [];
+        const logs = getOrderActivityLog(order);
         return `
           <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
             <div class="p-4 border-b border-slate-100 bg-slate-50/50">

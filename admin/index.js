@@ -197,6 +197,15 @@ function getOrderPayoutDisplay(order = {}) {
   );
 }
 
+function buildActivityLogEntry(message, type = "status", metadata = {}) {
+  return {
+    type,
+    message,
+    metadata: metadata && typeof metadata === "object" ? metadata : {},
+    at: new Date(),
+  };
+}
+
 function buildStatusEmail(status, order) {
   const normalizedStatus = String(status || "").trim().toLowerCase();
   const customerName = getOrderCustomerName(order);
@@ -298,12 +307,12 @@ async function sendCustomerEmail(orderRef, order, email) {
   const updatePayload = {
     lastCustomerEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
     lastCustomerEmailType: email.type || null,
-    activityLog: admin.firestore.FieldValue.arrayUnion({
-      type: "email",
-      message: `Sent ${email.subject} to customer.`,
-      metadata: { subject: email.subject, type: email.type || null },
-      at: admin.firestore.FieldValue.serverTimestamp(),
-    }),
+    activityLog: admin.firestore.FieldValue.arrayUnion(
+      buildActivityLogEntry(`Sent ${email.subject} to customer.`, "email", {
+        subject: email.subject,
+        type: email.type || null,
+      })
+    ),
   };
 
   await orderRef.set(updatePayload, { merge: true });
@@ -890,6 +899,24 @@ async function processLabelVoid(order, labelRequests, triggerSource = "manual") 
     updates.latestLabelGeneratedAt = admin.firestore.FieldValue.delete();
   }
 
+  if (results.length) {
+    const approvedCount = results.filter((result) => result.approved).length;
+    const failedCount = results.filter((result) => result.error || !result.approved).length;
+    updates.activityLog = admin.firestore.FieldValue.arrayUnion(
+      buildActivityLogEntry("Shipping label void request processed.", "label", {
+        triggerSource,
+        approvedCount,
+        failedCount,
+        labels: results.map((result) => ({
+          key: result.key,
+          labelId: result.labelId || null,
+          approved: Boolean(result.approved),
+          message: result.message || result.error || null,
+        })),
+      })
+    );
+  }
+
   if (Object.keys(updates).length) {
     await orderRef.update(updates);
   }
@@ -1004,6 +1031,10 @@ app.post("/api/submit-order", async (req, res) => {
       recaptchaVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       status: "pending_shipment",
+      activityLog: [buildActivityLogEntry("Order submitted by customer.", "order", {
+        status: "pending_shipment",
+        source: "checkout",
+      })],
     });
     console.log(`Order ${docRef.id} successfully added to Firestore.`);
     // Respond to the client with a success message
@@ -1118,6 +1149,13 @@ app.post("/api/generate-label/:id", async (req, res) => {
         labelVoidMessage: null,
         labelGeneratedAt: serverTimestamp,
         latestLabelGeneratedAt: serverTimestamp,
+        activityLog: admin.firestore.FieldValue.arrayUnion(
+          buildActivityLogEntry("Shipping label generated and emailed/available to customer.", "label", {
+            status: "label_generated",
+            trackingNumber: labelData.tracking_number || null,
+            labelId: labelData.label_id || null,
+          })
+        ),
         shipEngineLabels: {
           ...existingLabels,
           primary: primaryLabel,
@@ -1195,6 +1233,12 @@ app.put("/api/orders/:id/status", async (req, res) => {
       status,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       lastStatusUpdateAt: admin.firestore.FieldValue.serverTimestamp(),
+      activityLog: admin.firestore.FieldValue.arrayUnion(
+        buildActivityLogEntry(`Order changed status to ${status}.`, "status", {
+          status,
+          source: "admin_status_update",
+        })
+      ),
     };
 
     if (normalizedStatus === "completed") {
@@ -1282,7 +1326,7 @@ app.post("/api/orders/:id/send-condition-email", async (req, res) => {
         label: labelText || null,
         notes: notes?.trim() || null,
       },
-      at: admin.firestore.FieldValue.serverTimestamp(),
+      at: new Date(),
     };
 
     const updatePayload = {
