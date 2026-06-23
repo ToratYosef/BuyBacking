@@ -1719,6 +1719,9 @@
       shippingLabelSelectedRateId: "",
       shippingLabelRatesLoading: false,
       shippingLabelRatesError: "",
+      shippingLabelFullAddressVisible: false,
+      shippingLabelZipLookupMessage: "",
+      shippingLabelZipLookupStatus: "",
       customerEmailEditOpen: false,
       customerEmailDraft: "",
       customerEmailSaving: false,
@@ -1741,6 +1744,11 @@
         city: "",
         state: "",
         zipCode: "",
+        weightLb: "0",
+        weightOz: "8",
+        packageLength: "6",
+        packageWidth: "4",
+        packageHeight: "2",
         containsHazardousMaterials: true,
       },
       deferredOrdersRenderTimer: null,
@@ -1876,6 +1884,90 @@
     }
     let lastDrawerTriggerElement = null;
     let scheduledRenderFrame = 0;
+    const zipLookupCache = new Map();
+
+    function getFiveDigitZip(zip = "") {
+      const match = String(zip || "").match(/\d{5}/);
+      return match ? match[0] : "";
+    }
+
+    async function lookupZipCode(zip) {
+      const normalizedZip = getFiveDigitZip(zip);
+      if (!normalizedZip) return null;
+      if (zipLookupCache.has(normalizedZip)) return zipLookupCache.get(normalizedZip);
+      const response = await fetch(`https://api.zippopotam.us/us/${encodeURIComponent(normalizedZip)}`);
+      if (!response.ok) throw new Error(`ZIP lookup failed with ${response.status}`);
+      const data = await response.json();
+      const place = Array.isArray(data?.places) ? data.places[0] : null;
+      if (!place) throw new Error("ZIP lookup returned no places");
+      const result = {
+        city: String(place["place name"] || "").trim(),
+        state: String(place["state abbreviation"] || "").trim().toUpperCase(),
+      };
+      if (!result.city || !result.state) throw new Error("ZIP lookup returned incomplete place data");
+      zipLookupCache.set(normalizedZip, result);
+      return result;
+    }
+
+    function setShippingLabelZipLookupMessage(message = "", status = "") {
+      state.shippingLabelZipLookupMessage = message;
+      state.shippingLabelZipLookupStatus = status;
+      const messageEl = document.getElementById("shippingLabelZipLookupMessage");
+      if (!messageEl) return;
+      messageEl.textContent = message;
+      messageEl.className = `mt-1 min-h-[18px] text-xs ${status === "error" ? "text-amber-700" : status === "success" ? "text-emerald-700" : "text-slate-500"}`;
+    }
+
+    function setShippingLabelFullAddressVisible(visible = true) {
+      state.shippingLabelFullAddressVisible = Boolean(visible);
+      const fullAddress = document.getElementById("shippingLabelFullAddressFields");
+      const toggle = document.getElementById("shippingLabelFullAddressToggle");
+      if (fullAddress) fullAddress.classList.toggle("hidden", !state.shippingLabelFullAddressVisible);
+      if (toggle) toggle.textContent = state.shippingLabelFullAddressVisible ? "Hide full address fields" : "Show full address fields";
+    }
+
+    function attachZipAutofill({ zipInput, cityInput, stateInput, revealFullAddress } = {}) {
+      if (!zipInput || !cityInput || !stateInput) return;
+      let lookupSeq = 0;
+      const runLookup = async () => {
+        const seq = ++lookupSeq;
+        const normalizedZip = getFiveDigitZip(zipInput.value);
+        if (normalizedZip.length !== 5) {
+          setShippingLabelZipLookupMessage("", "");
+          return;
+        }
+
+        const cityAtStart = cityInput.value;
+        const stateAtStart = stateInput.value;
+        setShippingLabelZipLookupMessage("Looking up ZIP...", "loading");
+
+        try {
+          const result = await lookupZipCode(normalizedZip);
+          if (seq !== lookupSeq || !result) return;
+          if (cityInput.value === cityAtStart) {
+            cityInput.value = result.city;
+            state.shippingLabelForm.city = result.city;
+          }
+          if (stateInput.value === stateAtStart) {
+            stateInput.value = result.state;
+            state.shippingLabelForm.state = result.state;
+          }
+          state.shippingLabelRates = [];
+          state.shippingLabelSelectedRateId = "";
+          state.shippingLabelRatesError = "";
+          setShippingLabelZipLookupMessage(`Auto-filled ${result.city}, ${result.state}.`, "success");
+        } catch (error) {
+          if (seq !== lookupSeq) return;
+          console.warn("Manual label ZIP lookup failed:", error);
+          revealFullAddress?.();
+          setShippingLabelZipLookupMessage("Could not auto-fill ZIP. Enter city/state manually.", "error");
+        }
+      };
+
+      zipInput.addEventListener("input", runLookup);
+      runLookup();
+    }
+
     function prefillShippingLabelForm(order = null) {
       const info = order?.shippingInfo || {};
       state.shippingLabelForm = {
@@ -1884,8 +1976,16 @@
         city: String(info.city || "").trim(),
         state: String(info.state || "").trim(),
         zipCode: String(info.zipCode || "").trim(),
+        weightLb: "0",
+        weightOz: "8",
+        packageLength: "6",
+        packageWidth: "4",
+        packageHeight: "2",
         containsHazardousMaterials: true,
       };
+      state.shippingLabelFullAddressVisible = false;
+      state.shippingLabelZipLookupMessage = "";
+      state.shippingLabelZipLookupStatus = "";
     }
 
     function openShippingLabelModal() {
@@ -1897,6 +1997,9 @@
       state.shippingLabelSelectedRateId = "";
       state.shippingLabelRatesLoading = false;
       state.shippingLabelRatesError = "";
+      state.shippingLabelFullAddressVisible = false;
+      state.shippingLabelZipLookupMessage = "";
+      state.shippingLabelZipLookupStatus = "";
       prefillShippingLabelForm(null);
       state.shippingLabelModalOpen = true;
       scheduleRender();
@@ -1958,7 +2061,16 @@
           state: String(form.state || "").trim().toUpperCase(),
           zipCode: String(form.zipCode || "").trim(),
         },
-        containsHazardousMaterials: false,
+        package: {
+          weightLb: Number(form.weightLb || 0) || 0,
+          weightOz: Number(form.weightOz || 0) || 0,
+          dimensions: {
+            length: Number(form.packageLength || 6) || 6,
+            width: Number(form.packageWidth || 4) || 4,
+            height: Number(form.packageHeight || 2) || 2,
+          },
+        },
+        containsHazardousMaterials: form.containsHazardousMaterials === false ? false : true,
       };
     }
 
@@ -1986,6 +2098,125 @@
       if (Array.isArray(result.rateResponse?.rates)) return result.rateResponse.rates;
       if (Array.isArray(result.rate_response?.rates)) return result.rate_response.rates;
       return [];
+    }
+
+    function normalizeServiceName(rate = {}) {
+      return [
+        rate.carrier_friendly_name,
+        rate.carrierFriendlyName,
+        rate.carrierName,
+        rate.carrier_name,
+        rate.carrier_code,
+        rate.carrierCode,
+        rate.service_type,
+        rate.serviceType,
+        rate.service_code,
+        rate.serviceCode,
+        rate.service_name,
+        rate.serviceName,
+        rate.package_type,
+        rate.packageType,
+        rate.package_code,
+        rate.packageCode,
+      ].filter(Boolean).join(" ").toLowerCase();
+    }
+
+    function isAlwaysBlockedPhoneService(rate = {}) {
+      const name = normalizeServiceName(rate);
+      if (/media mail|library mail|bound printed|bound printed matter/.test(name)) return true;
+      if (/letter|flat|envelope|postcard/.test(name)) return true;
+      if (/first[-\s]?class mail|first class mail|first-class mail/.test(name) && !/package|parcel/.test(name)) return true;
+      return false;
+    }
+
+    function isGroundService(rate = {}) {
+      const name = normalizeServiceName(rate);
+      return /ground advantage|parcel select ground|parcel_select|ups.*ground|fedex.*ground|home delivery|ground_home_delivery/.test(name);
+    }
+
+    function isAirOrExpressService(rate = {}) {
+      const name = normalizeServiceName(rate);
+      return /priority mail|priority mail express|express|overnight|next day|nextday|2 day|2day|second day|air|saver|3 day|3-day|3day/.test(name);
+    }
+
+    function isUspsRate(rate = {}) {
+      return /usps|stamps\.com|stamps_com|stamps/.test(normalizeServiceName(rate));
+    }
+
+    function getManualLabelPackageDetails() {
+      const form = state.shippingLabelForm || {};
+      const weightLb = Math.max(0, Number(form.weightLb || 0) || 0);
+      const weightOz = Math.max(0, Number(form.weightOz || 0) || 0);
+      const length = Math.max(0, Number(form.packageLength || 0) || 0);
+      const width = Math.max(0, Number(form.packageWidth || 0) || 0);
+      const height = Math.max(0, Number(form.packageHeight || 0) || 0);
+      return {
+        weightLb,
+        weightOz,
+        totalOunces: (weightLb * 16) + weightOz,
+        dimensions: { length, width, height },
+        lengthGirth: length + (2 * (width + height)),
+      };
+    }
+
+    function isTooLargeForUspsPackage(packageDetails = getManualLabelPackageDetails()) {
+      return Number(packageDetails.lengthGirth || 0) > 130;
+    }
+
+    function isShippingLabelLithiumMode() {
+      return (state.shippingLabelForm || {}).containsHazardousMaterials !== false;
+    }
+
+    function filterPhoneShippingRates(rates, options = {}) {
+      const containsLithium = options.containsLithium !== false;
+      const packageDetails = options.packageDetails || getManualLabelPackageDetails();
+      return (Array.isArray(rates) ? rates : []).filter((rate) => {
+        if (!getManualShippingRateId(rate)) return false;
+        if (isAlwaysBlockedPhoneService(rate)) return false;
+        if (isTooLargeForUspsPackage(packageDetails) && isUspsRate(rate)) return false;
+        if (containsLithium) {
+          return isGroundService(rate) && !isAirOrExpressService(rate);
+        }
+        return true;
+      });
+    }
+
+    function getFilteredManualShippingRates() {
+      return filterPhoneShippingRates(state.shippingLabelRates || [], {
+        containsLithium: isShippingLabelLithiumMode(),
+        packageDetails: getManualLabelPackageDetails(),
+      }).sort((a, b) => {
+        const aAmount = getManualShippingRateAmount(a);
+        const bAmount = getManualShippingRateAmount(b);
+        return (aAmount ?? Number.MAX_SAFE_INTEGER) - (bAmount ?? Number.MAX_SAFE_INTEGER);
+      });
+    }
+
+    function selectCheapestValidManualShippingRate() {
+      const validRates = getFilteredManualShippingRates();
+      const selectedRateId = String(state.shippingLabelSelectedRateId || "").trim();
+      if (selectedRateId && validRates.some((rate) => getManualShippingRateId(rate) === selectedRateId)) {
+        return selectedRateId;
+      }
+      const nextRateId = getManualShippingRateId(validRates[0] || {});
+      state.shippingLabelSelectedRateId = nextRateId;
+      return nextRateId;
+    }
+
+    function getManualLabelPackageWarnings() {
+      const details = getManualLabelPackageDetails();
+      const warnings = [];
+      if (details.totalOunces > 80) {
+        warnings.push("This package looks heavy for a phone. Ground services only are recommended.");
+      }
+      const dimensions = details.dimensions || {};
+      if ([dimensions.length, dimensions.width, dimensions.height].some((value) => Number(value || 0) > 18)) {
+        warnings.push("This package looks oversized for a phone. Please verify dimensions before buying a label.");
+      }
+      if (isTooLargeForUspsPackage(details)) {
+        warnings.push("USPS options are hidden because this package exceeds USPS length + girth limits.");
+      }
+      return warnings;
     }
 
     async function fetchManualShippingRates() {
@@ -2019,13 +2250,17 @@
         if (lastRateError) throw lastRateError;
         const rates = extractManualShippingRates(result).filter((rate) => getManualShippingRateId(rate));
         state.shippingLabelRates = rates;
-        state.shippingLabelSelectedRateId = getManualShippingRateId(rates[0] || {});
+        selectCheapestValidManualShippingRate();
+        const validRates = getFilteredManualShippingRates();
         state.shippingLabelRatesLoading = false;
         if (!rates.length) {
           state.shippingLabelRatesError = "No ShipEngine rates were returned for this address.";
           toast(state.shippingLabelRatesError, "error");
+        } else if (!validRates.length) {
+          state.shippingLabelRatesError = "No safe phone shipping services found. Check package weight, dimensions, and lithium battery setting.";
+          toast(state.shippingLabelRatesError, "error");
         } else {
-          toast(`Found ${rates.length} ShipEngine rate${rates.length === 1 ? "" : "s"}.`, "success");
+          toast(`Found ${validRates.length} safe phone shipping service${validRates.length === 1 ? "" : "s"}.`, "success");
         }
         render();
       } catch (error) {
@@ -2048,11 +2283,18 @@
         toast("Select a ShipEngine rate before generating the label.", "error");
         return;
       }
+      const selectedRate = getFilteredManualShippingRates().find((rate) => getManualShippingRateId(rate) === selectedRateId) || null;
+      if (!selectedRate) {
+        state.shippingLabelSelectedRateId = "";
+        state.shippingLabelRatesError = "No safe phone shipping services found. Check package weight, dimensions, and lithium battery setting.";
+        render();
+        toast(state.shippingLabelRatesError, "error");
+        return;
+      }
 
       state.shippingLabelSubmitting = true;
       render();
       try {
-        const selectedRate = (state.shippingLabelRates || []).find((rate) => getManualShippingRateId(rate) === selectedRateId) || null;
         const payload = {
           ...buildManualShippingLabelPayload(),
           rateId: selectedRateId,
@@ -7679,6 +7921,17 @@
       const meToCustomerActive = direction === "me_to_customer";
       const previewUrl = state.shippingLabelPreviewUrl || "";
       const trackingNumber = state.shippingLabelTrackingNumber || "";
+      const fullAddressVisible = Boolean(state.shippingLabelFullAddressVisible);
+      const zipLookupMessage = state.shippingLabelZipLookupMessage || "";
+      const zipLookupStatus = state.shippingLabelZipLookupStatus || "";
+      const filteredShippingRates = getFilteredManualShippingRates();
+      const packageWarnings = getManualLabelPackageWarnings();
+      const lithiumMode = isShippingLabelLithiumMode();
+      const zipLookupMessageClass = zipLookupStatus === "error"
+        ? "text-amber-700"
+        : zipLookupStatus === "success"
+          ? "text-emerald-700"
+          : "text-slate-500";
       return `
         <div id="shippingLabelModalOverlay" class="fixed inset-0 z-[12000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 animate-in max-h-[92vh] overflow-hidden flex flex-col">
@@ -7701,29 +7954,70 @@
                   <label class="block text-xs font-semibold text-slate-600 mb-1">Customer full name</label>
                   <input id="shippingLabelFullName" type="text" value="${esc(form.fullName || "")}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="John Doe" />
                 </div>
-                <div class="sm:col-span-2">
+                <div>
                   <label class="block text-xs font-semibold text-slate-600 mb-1">Street address</label>
                   <input id="shippingLabelStreet" type="text" value="${esc(form.streetAddress || "")}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="123 Main St" />
                 </div>
                 <div>
-                  <label class="block text-xs font-semibold text-slate-600 mb-1">City</label>
-                  <input id="shippingLabelCity" type="text" value="${esc(form.city || "")}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Brooklyn" />
-                </div>
-                <div>
-                  <label class="block text-xs font-semibold text-slate-600 mb-1">State</label>
-                  <input id="shippingLabelState" type="text" maxlength="2" value="${esc(form.state || "")}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm uppercase" placeholder="NY" />
-                </div>
-                <div>
                   <label class="block text-xs font-semibold text-slate-600 mb-1">ZIP code</label>
                   <input id="shippingLabelZip" type="text" value="${esc(form.zipCode || "")}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="11230" />
+                  <p id="shippingLabelZipLookupMessage" class="mt-1 min-h-[18px] text-xs ${zipLookupMessageClass}">${esc(zipLookupMessage)}</p>
+                </div>
+                <div class="sm:col-span-2">
+                  <button id="shippingLabelFullAddressToggle" type="button" class="text-xs font-semibold text-indigo-600 hover:text-indigo-700">
+                    ${fullAddressVisible ? "Hide full address fields" : "Show full address fields"}
+                  </button>
+                </div>
+                <div id="shippingLabelFullAddressFields" class="${fullAddressVisible ? "" : "hidden"} sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">City</label>
+                    <input id="shippingLabelCity" type="text" value="${esc(form.city || "")}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Brooklyn" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">State</label>
+                    <input id="shippingLabelState" type="text" maxlength="2" value="${esc(form.state || "")}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm uppercase" placeholder="NY" />
+                  </div>
                 </div>
                 <label class="sm:col-span-2 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-slate-700">
                   <input id="shippingLabelHazardous" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" ${form.containsHazardousMaterials === false ? "" : "checked"} />
                   <span>
-                    <span class="block font-semibold text-slate-800">Contains hazardous materials</span>
-                    <span class="block text-xs text-slate-500">Checked requests dangerous-goods handling and ground-only rates.</span>
+                    <span class="block font-semibold text-slate-800">Contains lithium battery / used electronics</span>
+                    <span class="block text-xs text-slate-500">Checked filters phone labels to ground and surface services only.</span>
                   </span>
                 </label>
+              </div>
+              <div class="rounded-xl border border-slate-200 bg-white p-4">
+                <div class="mb-3">
+                  <p class="text-sm font-bold text-slate-900">Package details</p>
+                  <p class="text-xs text-slate-500">Defaults to 0 lb 8 oz and 6 × 4 × 2 inches.</p>
+                </div>
+                <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Weight lb</label>
+                    <input id="shippingLabelWeightLb" type="number" min="0" step="1" value="${esc(form.weightLb ?? "0")}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Weight oz</label>
+                    <input id="shippingLabelWeightOz" type="number" min="0" step="0.1" value="${esc(form.weightOz ?? "8")}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Length in</label>
+                    <input id="shippingLabelLength" type="number" min="0.1" step="0.1" value="${esc(form.packageLength ?? "6")}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Width in</label>
+                    <input id="shippingLabelWidth" type="number" min="0.1" step="0.1" value="${esc(form.packageWidth ?? "4")}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                  <div class="col-span-2 sm:col-span-1">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Height in</label>
+                    <input id="shippingLabelHeight" type="number" min="0.1" step="0.1" value="${esc(form.packageHeight ?? "2")}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                </div>
+                ${packageWarnings.length ? `
+                  <div class="mt-3 space-y-1">
+                    ${packageWarnings.map((warning) => `<p class="text-xs text-amber-700">${esc(warning)}</p>`).join("")}
+                  </div>
+                ` : ""}
               </div>
               <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -7734,17 +8028,22 @@
                   <button id="shippingLabelCheckRatesBtn" type="button" class="px-4 py-2 rounded-lg text-sm font-semibold ${state.shippingLabelRatesLoading ? "bg-slate-300 text-slate-600 cursor-not-allowed" : "bg-emerald-600 text-white hover:bg-emerald-700"}" ${state.shippingLabelRatesLoading ? "disabled" : ""}>${state.shippingLabelRatesLoading ? "Checking…" : "Check Rates"}</button>
                 </div>
                 ${state.shippingLabelRatesError ? `<div class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">${esc(state.shippingLabelRatesError)}</div>` : ""}
-                ${(state.shippingLabelRates || []).length ? `
+                ${filteredShippingRates.length ? `
                   <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1">Selected ShipEngine rate</label>
                     <select id="shippingLabelRateSelect" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-                      ${(state.shippingLabelRates || []).map((rate) => {
+                      ${filteredShippingRates.map((rate) => {
                         const id = getManualShippingRateId(rate);
                         return `<option value="${esc(id)}" ${id === state.shippingLabelSelectedRateId ? "selected" : ""}>${esc(formatManualShippingRate(rate))}</option>`;
                       }).join("")}
                     </select>
+                    <p class="mt-2 text-xs text-slate-500">
+                      ${lithiumMode
+                        ? "Lithium/used electronics mode: showing ground services only."
+                        : "Non-lithium mode: air services may appear, but Media Mail and invalid mail classes are still blocked."}
+                    </p>
                   </div>
-                ` : `<p class="text-xs text-slate-500">No rate selected yet.</p>`}
+                ` : `<p class="text-xs text-slate-500">${(state.shippingLabelRates || []).length ? "No safe phone shipping services found. Check package weight, dimensions, and lithium battery setting." : "No rate selected yet."}</p>`}
               </div>
               ${previewUrl ? `
                 <div class="rounded-xl border border-slate-200 overflow-hidden bg-slate-50">
@@ -9632,12 +9931,18 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
         const generateBtn = document.getElementById("shippingLabelModalGenerateBtn");
         const checkRatesBtn = document.getElementById("shippingLabelCheckRatesBtn");
         const rateSelect = document.getElementById("shippingLabelRateSelect");
+        const fullAddressToggle = document.getElementById("shippingLabelFullAddressToggle");
         const fullName = document.getElementById("shippingLabelFullName");
         const street = document.getElementById("shippingLabelStreet");
         const city = document.getElementById("shippingLabelCity");
         const stateInput = document.getElementById("shippingLabelState");
         const zip = document.getElementById("shippingLabelZip");
         const hazardous = document.getElementById("shippingLabelHazardous");
+        const weightLb = document.getElementById("shippingLabelWeightLb");
+        const weightOz = document.getElementById("shippingLabelWeightOz");
+        const packageLength = document.getElementById("shippingLabelLength");
+        const packageWidth = document.getElementById("shippingLabelWidth");
+        const packageHeight = document.getElementById("shippingLabelHeight");
 
         const syncField = (key, value) => {
           state.shippingLabelForm[key] = String(value || "");
@@ -9651,11 +9956,34 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
         if (city) city.addEventListener("input", (event) => syncField("city", event.target.value));
         if (stateInput) stateInput.addEventListener("input", (event) => syncField("state", event.target.value.toUpperCase()));
         if (zip) zip.addEventListener("input", (event) => syncField("zipCode", event.target.value));
+        if (weightLb) weightLb.addEventListener("input", (event) => syncField("weightLb", event.target.value));
+        if (weightOz) weightOz.addEventListener("input", (event) => syncField("weightOz", event.target.value));
+        if (packageLength) packageLength.addEventListener("input", (event) => syncField("packageLength", event.target.value));
+        if (packageWidth) packageWidth.addEventListener("input", (event) => syncField("packageWidth", event.target.value));
+        if (packageHeight) packageHeight.addEventListener("input", (event) => syncField("packageHeight", event.target.value));
         if (hazardous) {
           hazardous.addEventListener("change", (event) => {
             state.shippingLabelForm.containsHazardousMaterials = Boolean(event.target.checked);
+            selectCheapestValidManualShippingRate();
+            if ((state.shippingLabelRates || []).length && !getFilteredManualShippingRates().length) {
+              state.shippingLabelRatesError = "No safe phone shipping services found. Check package weight, dimensions, and lithium battery setting.";
+            } else {
+              state.shippingLabelRatesError = "";
+            }
+            render();
           });
         }
+        if (fullAddressToggle) {
+          fullAddressToggle.addEventListener("click", () => {
+            setShippingLabelFullAddressVisible(!state.shippingLabelFullAddressVisible);
+          });
+        }
+        attachZipAutofill({
+          zipInput: zip,
+          cityInput: city,
+          stateInput,
+          revealFullAddress: () => setShippingLabelFullAddressVisible(true),
+        });
 
         if (customerToMeBtn) {
           customerToMeBtn.addEventListener("click", () => {

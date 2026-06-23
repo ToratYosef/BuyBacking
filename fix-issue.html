@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resolve Device Issue | SecondHandCell</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="/favicon/favicon.ico">
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #f8fafc;
+      color: #0f172a;
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .status {
+      max-width: 520px;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .status h1 {
+      margin: 0 0 10px;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    .status p {
+      margin: 0;
+      color: #475569;
+      line-height: 1.6;
+    }
+
+    .status a {
+      color: #0f766e;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <main class="status" id="status">
+    <h1>Loading your issue page</h1>
+    <p>Please wait while we pull up your order details.</p>
+  </main>
+
+  <script>
+    (async function () {
+      const FRONTEND_FIX_PAGE_URL = "https://secondhandcell.com/fix-issue.html";
+      const BACKEND_API_ORIGIN = "https://api.secondhandcell.com";
+      const BACKEND_API_BASE_URL = `${BACKEND_API_ORIGIN}/server`;
+      const status = document.getElementById("status");
+      const params = new URLSearchParams(window.location.search);
+      const orderId = (params.get("orderId") || params.get("id") || "").trim();
+
+      function showError(message) {
+        status.innerHTML = `
+          <h1>We couldn't load this issue page</h1>
+          <p>${message} Please contact <a href="mailto:sales@secondhandcell.com">sales@secondhandcell.com</a> for help.</p>
+        `;
+      }
+
+      if (!orderId) {
+        showError("The order link is missing an order number.");
+        return;
+      }
+
+      params.delete("orderId");
+      params.delete("id");
+
+      const issuePageUrl = new URL(`${BACKEND_API_BASE_URL}/orders/${encodeURIComponent(orderId)}/issue-resolved`);
+      params.forEach((value, key) => {
+        issuePageUrl.searchParams.append(key, value);
+      });
+
+      try {
+        const response = await fetch(issuePageUrl.toString(), {
+          method: "GET",
+          credentials: "omit",
+        });
+
+        if (!response.ok) {
+          throw new Error(`Issue page request failed with status ${response.status}`);
+        }
+
+        const confirmPath = `/fix-issue/${encodeURIComponent(orderId)}/confirm`;
+        const confirmUrl = `${BACKEND_API_ORIGIN}${confirmPath}`;
+        const html = (await response.text())
+          .replace(
+            `"confirmUrl":"${confirmPath}"`,
+            `"confirmUrl":"${confirmUrl}"`
+          )
+          .replace(
+            /window\.SHC_API_BASE_URL\s*=\s*"https:\/\/api\.secondhandcell\.com\/server";/,
+            `window.SHC_API_BASE_URL = "${BACKEND_API_BASE_URL}";`
+          );
+
+        window.history.replaceState(null, "", `${FRONTEND_FIX_PAGE_URL}?orderId=${encodeURIComponent(orderId)}${params.toString() ? `&${params.toString()}` : ""}`);
+        document.open();
+        document.write(html);
+        document.close();
+      } catch (error) {
+        console.error("Failed to load frontend issue wrapper:", error);
+        showError("The issue page is temporarily unavailable.");
+      }
+    })();
+  </script>
+</body>
+</html>
