@@ -854,20 +854,27 @@
     function getOrderDeductionValue(order) {
       const explicitTotal = Number(order?.totalDeductions ?? order?.total_deductions ?? NaN);
       if (Number.isFinite(explicitTotal) && explicitTotal > 0) return explicitTotal;
-      const directValues = [
-        order?.deductionValue,
-        order?.deduction_value,
-        order?.shippingKitFee,
-        order?.fasterShippingFee,
-        order?.shippingDeduction,
-        order?.shipping_deduction,
-        order?.kitDeduction,
-        order?.kit_deduction,
-      ];
-      let total = directValues.reduce((sum, value) => {
-        const n = Number(value);
-        return Number.isFinite(n) && n > 0 ? sum + n : sum;
-      }, 0);
+
+      const preference = normalizeStatusKey(order?.shippingPreferenceValue || order?.shippingPreference || order?.shipping_preference || '');
+      const fasterShippingRequested = preference === 'faster_shipping'
+        || preference === 'faster-shipping'
+        || preference === 'ups_label'
+        || preference === 'ups-label-requested'
+        || Number(order?.fasterShippingFee) > 0;
+
+      const shippingKitFee = Number(order?.shippingKitFee ?? order?.kitDeduction ?? order?.kit_deduction ?? 0);
+      let total = Number.isFinite(shippingKitFee) && shippingKitFee > 0 ? shippingKitFee : 0;
+
+      // Checkout stores the same faster-shipping charge in both `deductionValue`
+      // and `fasterShippingFee`. Treat those fields as aliases so admin payout
+      // totals match the $5 buyer-facing deduction instead of double-counting $10.
+      if (fasterShippingRequested) {
+        total += 5;
+      } else {
+        const fallbackDeduction = Number(order?.deductionValue ?? order?.deduction_value ?? order?.shippingDeduction ?? order?.shipping_deduction ?? 0);
+        if (Number.isFinite(fallbackDeduction) && fallbackDeduction > 0) total += fallbackDeduction;
+      }
+
       if (Array.isArray(order?.deductions)) {
         total += order.deductions.reduce((sum, entry) => {
           const n = Number(typeof entry === 'object' ? (entry.amount ?? entry.value ?? entry.price) : entry);
@@ -879,10 +886,7 @@
           return Number.isFinite(n) && n > 0 ? sum + n : sum;
         }, 0);
       }
-      if (total > 0) return total;
-      const preference = normalizeStatusKey(order?.shippingPreferenceValue || order?.shippingPreference || order?.shipping_preference || '');
-      if (preference === 'faster_shipping' || preference === 'faster-shipping' || preference === 'ups_label' || preference === 'ups-label-requested') return 5;
-      return 0;
+      return total > 0 ? total : 0;
     }
     function getOrderSettlementSummary(order, targetDeviceKeys = null) {
       const entries = getOrderDeviceEntries(order);
@@ -5876,7 +5880,6 @@
           const offer = getEffectivePerDeviceOffer(order, item, deviceKey);
           const acceptedDeviceOffer = getDeviceAcceptedReofferPayout(order, deviceKey, offer);
           const isAcceptedReoffer = isAcceptedReofferStatus(rawDeviceStatus) || isAcceptedReofferStatus(deviceStatus);
-          const isAutoAcceptedReoffer = statusToken(rawDeviceStatus) === 're-offered-auto-accepted' || statusToken(rawDeviceStatus) === 're_offered_auto_accepted';
           const isDeclinedReoffer = isDeclinedReofferStatus(deviceStatus);
           const showAcceptedOfferSwap = (isAcceptedReoffer || isDeclinedReoffer)
             && Number.isFinite(acceptedDeviceOffer)
@@ -5889,12 +5892,7 @@
           const qcData = order?.qcDataByDevice?.[deviceKey];
           const hasQcData = qcData && Object.keys(qcData).length > 0;
           const isAwaitingReQc = normalizeStatusKey(deviceStatus) === 'issue_resolved';
-          const qcStatusBadge = isAutoAcceptedReoffer
-            ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200">
-                <i data-lucide="check-circle" style="width:11px;height:11px"></i>
-                Auto accepted
-              </span>`
-            : isAwaitingReQc
+          const qcStatusBadge = isAwaitingReQc
             ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                 <i data-lucide="rotate-ccw" style="width:11px;height:11px"></i>
                 Pending re-QC
